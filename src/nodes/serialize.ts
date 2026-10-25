@@ -33,7 +33,7 @@ import {
 // Reached by MODULE, like `../graph/subgraph.js` above: the validator is
 // the graph layer's own, not package API, and the reader needs the same one
 // the live setter uses so a value refused by one is refused by both.
-import { canonicalEnumValue, graphParamError, paramValueError } from "../graph/params.js";
+import { canonicalEnumValue, graphParamError, paramValueError, renamedEnumWord } from "../graph/params.js";
 import {
   CARRIED_PIN_NAMES,
   ITERATED_PIN_NAMES,
@@ -1197,6 +1197,18 @@ function paramValueFault(
 ): Fault | undefined {
   const bad = paramValueError(schema, value);
   if (bad === undefined) return undefined;
+  const was = renamedEnumWord(schema, value);
+  if (was !== undefined && schema.enum !== undefined) {
+    return {
+      code: "invalid-param-value",
+      message: `${where}: ${bad}`,
+      ...at,
+      got: value,
+      valid: [...schema.enum],
+      didYouMean: [was.to],
+      fix: `replace "${value as string}" with "${was.to}"`,
+    };
+  }
   if (schema.type === "enum" && typeof value === "string" && schema.enum !== undefined) {
     const near = suggestNames(value, schema.enum);
     return {

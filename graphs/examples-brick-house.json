@@ -455,7 +455,7 @@
             ]
           ]
         },
-        "frame": "world",
+        "frame": "box",
         "alongAxisAttr": "alongAxis",
         "alongSignAttr": "alongSign",
         "outwardAttr": "outward",
@@ -3146,7 +3146,7 @@
       "id": "chimBox",
       "type": "placeBox",
       "params": {
-        "frame": "world",
+        "frame": "box",
         "alongAxisAttr": "alongAxis",
         "alongSignAttr": "alongSign",
         "outwardAttr": "outward",
@@ -3691,7 +3691,7 @@
       "id": "chimShadow",
       "type": "placeBox",
       "params": {
-        "frame": "world",
+        "frame": "box",
         "alongAxisAttr": "alongAxis",
         "alongSignAttr": "alongSign",
         "outwardAttr": "outward",
@@ -5777,7 +5777,7 @@
             0
           ]
         },
-        "frame": "world",
+        "frame": "box",
         "alongAxisAttr": "alongAxis",
         "alongSignAttr": "alongSign",
         "outwardAttr": "outward",
@@ -5970,7 +5970,7 @@
           0,
           0
         ],
-        "pivotIn": "world",
+        "pivotIn": "origin",
         "translate": {
           "fn": "mul",
           "args": [

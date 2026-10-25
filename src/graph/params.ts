@@ -95,6 +95,20 @@ export interface ParamSchema {
    * two functions.
    */
   readonly acceptsInfinite?: boolean;
+  /**
+   * Enum words this param USED to take, each with the word that replaced it
+   * and why (`enum` params only). A retired word is still REFUSED — a
+   * rename never silently re-reads an old graph under a new meaning — but
+   * the refusal names the replacement and the reason, so the fix is in the
+   * message rather than in a changelog.
+   */
+  readonly renamed?: Readonly<Record<string, { readonly to: string; readonly why: string }>>;
+}
+
+/** The replacement of a retired enum word, or undefined when `value` is not one. */
+export function renamedEnumWord(schema: ParamSchema, value: unknown): { readonly to: string; readonly why: string } | undefined {
+  if (schema.renamed === undefined || typeof value !== "string" || !Object.hasOwn(schema.renamed, value)) return undefined;
+  return schema.renamed[value];
 }
 
 /** One node param a graph-scoped param writes into. */
@@ -265,6 +279,14 @@ export function paramSchemaError(schema: ParamSchema): string | undefined {
   const d = schema.default;
   if (schema.enum !== undefined && schema.type !== "enum") {
     return `declares an enum list but has type "${schema.type}" (use type "enum")`;
+  }
+  if (schema.renamed !== undefined) {
+    if (schema.type !== "enum") return `declares renamed enum words but has type "${schema.type}"`;
+    for (const [old, r] of Object.entries(schema.renamed)) {
+      if ((schema.enum ?? []).includes(old)) return `declares "${old}" both valid and renamed`;
+      if (!(schema.enum ?? []).includes(r.to)) return `renames "${old}" to "${r.to}", which is not in its enum list`;
+      if (typeof r.why !== "string" || r.why.trim() === "") return `renames "${old}" with no reason`;
+    }
   }
   switch (schema.type) {
     case "f32":
@@ -504,7 +526,10 @@ function valueError(schema: ParamSchema, value: unknown, allowInfinite: boolean)
     case "enum": {
       const valid = schema.enum ?? [];
       if (typeof value !== "string" || !valid.includes(value)) {
-        return `expected one of ${valid.map((v) => `"${v}"`).join(", ")}, got ${JSON.stringify(value)}`;
+        const was = renamedEnumWord(schema, value);
+        const list = `one of ${valid.map((v) => `"${v}"`).join(", ")}`;
+        if (was !== undefined) return `"${value}" was renamed "${was.to}" — ${was.why}; write "${was.to}" (expected ${list})`;
+        return `expected ${list}, got ${JSON.stringify(value)}`;
       }
       return undefined;
     }

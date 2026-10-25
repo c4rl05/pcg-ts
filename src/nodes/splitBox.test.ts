@@ -1414,10 +1414,10 @@ describe("splitBox: direction", () => {
 });
 
 describe("splitBox: direction and the absolute lattice", () => {
-  it("a reversed split with snap is NOT the mirror image: the lattice stays the world's", async () => {
+  it("a reversed split with snap is NOT the mirror image: the lattice stays the box coordinates' own", async () => {
     // The reviewer's case: box [0, 10], absolute sizes [3, 7], snap 4. The
     // forward cut at 3 rounds to 4; the reversed raw cut at 10 - 3 = 7
-    // rounds to 8 on the same world lattice, not to 6 (the mirror of 4).
+    // rounds to 8 on the same lattice, not to 6 (the mirror of 4).
     const p = { labels: ["a", "b"], sizes: [3, 7], units: ["absolute", "absolute"], snap: [4, 0, 0], snapMode: "round" };
     expect(spans(await split(unitCell(0, 10), p))).toEqual([
       [0, 4],
@@ -1429,7 +1429,7 @@ describe("splitBox: direction and the absolute lattice", () => {
     ]);
   });
 
-  it('"floor" and "ceil" keep their world meaning when reversed', async () => {
+  it('"floor" and "ceil" keep their meaning (down and up the axis) when reversed', async () => {
     // Raw reversed cut at 7: floor takes it down to 4, ceil up to 8.
     const p = { labels: ["a", "b"], sizes: [3, 7], units: ["absolute", "absolute"], snap: [4, 0, 0], direction: -1 };
     expect(spans(await split(unitCell(0, 10), { ...p, snapMode: "floor" }))).toEqual([

@@ -10,27 +10,35 @@
  * the same again for the max corner. That is one operation, an axis-aligned
  * affine map, stated here once.
  *
- * THE MAP, per world axis k: x' = (x - pivot) * scale + pivot + translate,
+ * THE MAP, per box axis k: x' = (x - pivot) * scale + pivot + translate,
  * applied to both faces, the faces swapped where a scale is negative so the
- * min corner stays the min. The pivot is a world point ("world"), or a
+ * min corner stays the min. The pivot is a point in the boxes' own
+ * coordinates ("origin", [0, 0, 0] being the cell's P), or a
  * fraction of the cell's own box ("cell", placeBox's anchor reading: 0 the
  * min face, 0.5 the centre, 1 the max face), or a fraction of the bounding
  * box of every cell transformed ("union"), so one pivot serves a whole
  * assembly and neighbouring boxes stay touching.
  *
- * NO ROTATION. An axis-aligned box stays axis-aligned only under a map that
- * keeps the axes, which is a per-axis scale and a translation; a rotated
- * box is not a box this vocabulary can store, and a quarter turn would also
- * have to turn the face frame shellSplit writes. A point that carries its
- * box as a LOCAL extent (the instance reading) is rotated with
- * transformPoints, which moves P and composes rot and scale instead.
+ * NO ROTATION. A box stays a box only under a map that keeps its axes,
+ * which is a per-axis scale and a translation; a quarter turn would also
+ * have to turn the face frame shellSplit writes. A cell's box is an extent
+ * in its point's own frame (world = P + rot * (scale * x)), so a cell is
+ * turned by turning its POINT — transformPoints, which moves P and
+ * composes rot and scale — and its box turns with it.
  *
  * NOTHING ELSE MOVES, as in offsetBox: same points, same order, same seeds,
  * every attribute and the topology carried; only boundsMin/boundsMax are
- * rewritten, in the coordinates they hold. P, rot and scale are not read.
+ * rewritten, in the coordinates they hold. P, rot and scale are not read:
+ * a per-axis map along the box's own axes commutes with the point's
+ * transform (tests/localBoxes.test.ts). The one exception is "union",
+ * which pools corners from many cells: corners in different frames have
+ * no common bounding box, so the chosen cells must share ONE transform —
+ * bit-identical P, rot and scale, as every piece of one grammar root has —
+ * and are refused otherwise, naming two that differ.
  */
 import { canonicalOneOf } from "../diagnostics/canonical.js";
 import { deriveGeometry } from "../data/derive.js";
+import type { Attribute, AttributeSet } from "../data/index.js";
 import { isField } from "../fields/index.js";
 import { makeGeometryItem } from "../graph/index.js";
 import { type InsideOutWording, requireBoxColumns, requireCellBoxAxis, resolveWhere } from "./boxCells.js";
@@ -54,11 +62,18 @@ export type { TransformBoxParams } from "./params.generated.js";
 
 const NODE = "transformBox";
 
-const PIVOTS = ["world", "cell", "union"] as const;
+const PIVOTS = ["origin", "cell", "union"] as const;
+/** Why "world" became "origin": the schema's `renamed` entry, and the direct-call refusal's text. */
+const PIVOT_RENAMED = {
+  world: {
+    to: "origin",
+    why: "a cell's box is an extent in its point's OWN frame (world = P + rot * (scale * x)), so a pivot point is in the box's coordinates, [0, 0, 0] being the cell's P, not the world's origin; the reading is the same",
+  },
+} as const;
 const AXIS_NAMES = ["x", "y", "z"] as const;
 
 /** Pivot codes, decided once. */
-const PIVOT_WORLD = 0;
+const PIVOT_ORIGIN = 0;
 const PIVOT_CELL = 1;
 const PIVOT_UNION = 2;
 
@@ -79,11 +94,53 @@ function lerpExact(a: number, b: number, f: number): number {
   return (1 - f) * a + f * b;
 }
 
+/** The transform columns "union" requires shared, with the value a missing column reads as. */
+const TRANSFORM_COLUMNS = [
+  ["P", 3, [0, 0, 0]],
+  ["rot", 4, [0, 0, 0, 1]],
+  ["scale", 3, [1, 1, 1]],
+] as const;
+
+/**
+ * "union" pools corners from every chosen cell, which is a box only when
+ * the corners share a frame: refuse, naming the first chosen cell, the
+ * first that differs from it and the column, unless every chosen cell's P,
+ * rot and scale are bit-identical (Object.is per component, so +0 and -0
+ * differ). A missing rot or scale column reads as the identity, as every
+ * reader of a point's transform takes it.
+ */
+function requireSharedFrame(pts: AttributeSet, n: number, chosen: (i: number) => boolean, checkCancelled: () => void): void {
+  const cols = TRANSFORM_COLUMNS.map(([name, size, dflt]) => {
+    const a = pts.get(name);
+    const data = a !== undefined && a.type !== "string" ? (a.data as ArrayLike<number>) : undefined;
+    const stride = data !== undefined ? (a as Attribute).tupleSize : 0;
+    return { name, size, at: (row: number, c: number): number => (data !== undefined && c < stride ? data[row * stride + c] : dflt[c]) };
+  });
+  let first = -1;
+  for (let i = 0; i < n; i++) {
+    if ((i & (CANCEL_STRIDE - 1)) === 0) checkCancelled();
+    if (!chosen(i)) continue;
+    if (first < 0) {
+      first = i;
+      continue;
+    }
+    for (const { name, size, at } of cols) {
+      for (let c = 0; c < size; c++) {
+        if (Object.is(at(first, c), at(i, c))) continue;
+        const tuple = (row: number) => `[${Array.from({ length: size }, (_, k) => (Object.is(at(row, k), -0) ? "-0" : String(at(row, k)))).join(", ")}]`;
+        throw new Error(
+          `${NODE}: pivotIn "union" takes one bounding box of every chosen cell, but cells ${first} and ${i} are in different frames — ${name} ${tuple(first)} and ${tuple(i)}. A cell's box is an extent in its point's own frame (world = P + rot * (scale * x)), so corners in two frames have no common box. Union cells that share one P, rot and scale (every piece of one grammar root does), choose one frame's cells with "where", or scale each about its own box with pivotIn "cell".`,
+        );
+      }
+    }
+  }
+}
+
 /** Every cell's box scaled about a pivot, then moved. */
 export const transformBox = standardNode<TransformBoxParams, TransformBoxInputs, TransformBoxOutputs>({
   type: NODE,
   category: "point op",
-  description: `SCALES every cell's box ABOUT A PIVOT and then MOVES it — the transform of a modelling package applied to geometry that is a box, and the way a set of boxes goes from one coordinate system to another: a lattice of whole studs and plates to world units, an assembly centred on its lot, a piece shrunk about its own centre. A CELL IS A POINT WITH A BOX, as in splitBox: its standard \`boundsMin\`/\`boundsMax\`, read and written in the coordinates they hold. THE MAP, per world axis: x' = (x - pivot) * scale + pivot + translate, applied to BOTH faces, so a box from 2 to 6 scaled by 0.5 about 0 runs from 1 to 3, about its centre (4) from 3 to 5, and with translate -4 after either. A NEGATIVE scale MIRRORS the box about the pivot, its faces swapped so boundsMin stays the min corner; a scale of 0 leaves a box of no volume on the pivot, KEPT, never dropped. \`pivotIn\` says what \`pivot\` is, decided once per cook: "world" (the default) a point in the boxes' coordinates, [0, 0, 0] the origin; "cell" a 0..1 FRACTION of the cell's OWN box per axis, placeBox's anchor reading — 0 the min face, 0.5 the centre, 1 the max face, any value between in proportion, and outside 0..1 past the face — so [0.5, 0.5, 0.5] scales every box about its own centre and [0.5, 0, 0.5] about the middle of its floor; "union" the same fraction of the BOUNDING BOX OF EVERY CELL this cook transforms (the cells \`where\` selects), so one pivot serves a whole assembly and boxes that touched still touch: [0.5, 0, 0.5] scales a house about the middle of its footprint. A scale about one shared pivot ("world" or "union") keeps a tiling a tiling; a scale about each cell's own pivot opens or closes the gaps between them. \`scale\`, \`pivot\` and \`translate\` are vec3, plain or FIELDS resolved per cell on the INPUT (box names read the box as it arrived; a scalar broadcasts to all three), all in WORLD axes. NO ROTATION: an axis-aligned box stays one only under a map that keeps the axes; a point whose box is a LOCAL extent (an instance) is rotated with transformPoints, which moves P and composes rot and scale. Every param, plain or field, is held as f32 (as every field constant is), so scale 0.4 is f32(0.4) and a plain value past f32's range is refused by name; the boxes are computed in f64 from those f32 numbers and the stored f32 corners and written as f32, a -0 face written +0 (an input face of -0 too). An input box that is inside out or not finite, and a result past what f32 bounds hold, are refused naming the cell — leave such a cell out with \`where\`, which passes chosen cells through EXACTLY as they arrived (0 = untouched, and under "union" not counted in the pivot box). Same points, same order, same SEEDS, every attribute (strings included), the topology and the detail attributes carried; P, rot and scale are neither read nor written. CPU only, as every box node. Use it where a setBounds rebuilt both corners from box("lo") and box("hi") by one scale and one shift: the map is then stated once instead of per corner.`,
+  description: `SCALES every cell's box ABOUT A PIVOT and then MOVES it — the transform of a modelling package applied to geometry that is a box, and the way a set of boxes goes from one coordinate system to another: a lattice of whole studs and plates to units, an assembly centred on its lot, a piece shrunk about its own centre. A CELL IS A POINT WITH A BOX, as in splitBox: its standard \`boundsMin\`/\`boundsMax\`, an extent in the point's OWN frame (world = P + rot * (scale * x)), read and written in the coordinates they hold. THE MAP, per box axis: x' = (x - pivot) * scale + pivot + translate, applied to BOTH faces, so a box from 2 to 6 scaled by 0.5 about 0 runs from 1 to 3, about its centre (4) from 3 to 5, and with translate -4 after either. A NEGATIVE scale MIRRORS the box about the pivot, its faces swapped so boundsMin stays the min corner; a scale of 0 leaves a box of no volume on the pivot, KEPT, never dropped. \`pivotIn\` says what \`pivot\` is, decided once per cook: "origin" (the default) a point in the boxes' own coordinates, [0, 0, 0] their origin — the cell's P (it was called "world"; that word is refused with the rename stated); "cell" a 0..1 FRACTION of the cell's OWN box per axis, placeBox's anchor reading — 0 the min face, 0.5 the centre, 1 the max face, any value between in proportion, and outside 0..1 past the face — so [0.5, 0.5, 0.5] scales every box about its own centre and [0.5, 0, 0.5] about the middle of its floor; "union" the same fraction of the BOUNDING BOX OF EVERY CELL this cook transforms (the cells \`where\` selects), so one pivot serves a whole assembly and boxes that touched still touch: [0.5, 0, 0.5] scales a house about the middle of its footprint — and since corners in different frames have no common box, "union" refuses chosen cells that do not share one P, rot and scale bit for bit (every piece of one grammar root does), naming two that differ. A scale about one shared pivot ("origin" or "union") keeps a tiling a tiling; a scale about each cell's own pivot opens or closes the gaps between them. \`scale\`, \`pivot\` and \`translate\` are vec3, plain or FIELDS resolved per cell on the INPUT (box names read the box as it arrived; a scalar broadcasts to all three), all along the box's own axes. NO ROTATION: a box stays a box only under a map that keeps its axes; to turn a cell, turn its point with transformPoints, which moves P and composes rot and scale, and the box turns with it. Every param, plain or field, is held as f32 (as every field constant is), so scale 0.4 is f32(0.4) and a plain value past f32's range is refused by name; the boxes are computed in f64 from those f32 numbers and the stored f32 corners and written as f32, a -0 face written +0 (an input face of -0 too). An input box that is inside out or not finite, and a result past what f32 bounds hold, are refused naming the cell — leave such a cell out with \`where\`, which passes chosen cells through EXACTLY as they arrived (0 = untouched, and under "union" not counted in the pivot box). Same points, same order, same SEEDS, every attribute (strings included), the topology and the detail attributes carried; P, rot and scale are neither read nor written (beyond "union"'s shared-frame check), so the transformed box keeps its cell's frame. CPU only, as every box node. Use it where a setBounds rebuilt both corners from box("lo") and box("hi") by one scale and one shift: the map is then stated once instead of per corner.`,
   inputs: [{ name: "in", kind: "geometry" }],
   outputs: [{ name: "out", kind: "geometry" }],
   params: {
@@ -92,28 +149,29 @@ export const transformBox = standardNode<TransformBoxParams, TransformBoxInputs,
       default: [1, 1, 1],
       acceptsField: true,
       description:
-        "The scale per WORLD axis [x, y, z], about the pivot: 1 keeps the axis, 0.5 halves it, 2 doubles it, a negative value mirrors the box about the pivot (its faces swapped, so boundsMin stays the min), and 0 leaves a box of no volume on the pivot. [1, 0.4, 1] takes a lattice counted in studs across and plates up to world units where a plate is 0.4 of a stud. As a FIELD it is resolved per cell on the INPUT (box names read the box as it arrived) and a scalar broadcasts to all three. Must be finite.",
+        "The scale per box axis [x, y, z], about the pivot: 1 keeps the axis, 0.5 halves it, 2 doubles it, a negative value mirrors the box about the pivot (its faces swapped, so boundsMin stays the min), and 0 leaves a box of no volume on the pivot. [1, 0.4, 1] takes a lattice counted in studs across and plates up to units where a plate is 0.4 of a stud. As a FIELD it is resolved per cell on the INPUT (box names read the box as it arrived) and a scalar broadcasts to all three. Must be finite.",
     },
     pivot: {
       type: "vec3",
       default: [0, 0, 0],
       acceptsField: true,
       description:
-        "The point the scale is about, per WORLD axis, read as `pivotIn` says: under \"world\" a point in the boxes' coordinates (the default [0, 0, 0] is the origin); under \"cell\" a fraction of the cell's own box (0 the min face, 0.5 the centre, 1 the max face — placeBox's anchor reading); under \"union\" the same fraction of the bounding box of every cell transformed. The pivot does not move: a box face on it stays where it is, whatever the scale. As a FIELD it is resolved per cell on the input; a scalar broadcasts. Must be finite.",
+        "The point the scale is about, per box axis, read as `pivotIn` says: under \"origin\" a point in the boxes' own coordinates (the default [0, 0, 0] is their origin, the cell's P); under \"cell\" a fraction of the cell's own box (0 the min face, 0.5 the centre, 1 the max face — placeBox's anchor reading); under \"union\" the same fraction of the bounding box of every cell transformed. The pivot does not move: a box face on it stays where it is, whatever the scale. As a FIELD it is resolved per cell on the input; a scalar broadcasts. Must be finite.",
     },
     pivotIn: {
       type: "enum",
       enum: [...PIVOTS],
-      default: "world",
+      default: "origin",
+      renamed: PIVOT_RENAMED,
       description:
-        "What `pivot` is measured in. \"world\" (the default): a point in the boxes' own coordinates. \"cell\": a 0..1 fraction of each cell's OWN box per axis, so [0.5, 0.5, 0.5] scales every box about its own centre — which opens (or closes) the gaps between neighbours. \"union\": the same fraction of the bounding box of EVERY cell this cook transforms (those `where` selects), one pivot for the whole assembly, so boxes that touched still touch — [0.5, 0, 0.5] scales a building about the middle of its footprint, at ground level. Decided once per cook.",
+        "What `pivot` is measured in. \"origin\" (the default): a point in the boxes' own coordinates, [0, 0, 0] the cell's P (it was called \"world\"; that word is refused with the rename stated). \"cell\": a 0..1 fraction of each cell's OWN box per axis, so [0.5, 0.5, 0.5] scales every box about its own centre — which opens (or closes) the gaps between neighbours. \"union\": the same fraction of the bounding box of EVERY cell this cook transforms (those `where` selects), one pivot for the whole assembly, so boxes that touched still touch — [0.5, 0, 0.5] scales a building about the middle of its footprint, at ground level. The chosen cells must share one P, rot and scale bit for bit (corners in different frames have no common box); cells that do not are refused, naming two. Decided once per cook.",
     },
     translate: {
       type: "vec3",
       default: [0, 0, 0],
       acceptsField: true,
       description:
-        "How far every box moves AFTER the scale, per WORLD axis, in the output's units: [0, 0, 0] (the default) leaves it on the pivot's frame. A field reading a per-cell attribute moves each cell by its own amount — mul(attribute(\"lot\", 3), [-0.5, 0, -0.5]) centres a lot whose box starts at the origin on x and z. As a FIELD it is resolved per cell on the input; a scalar broadcasts. Must be finite.",
+        "How far every box moves AFTER the scale, per box axis, in the output's units: [0, 0, 0] (the default) leaves it on the pivot's frame. A field reading a per-cell attribute moves each cell by its own amount — mul(attribute(\"lot\", 3), [-0.5, 0, -0.5]) centres a lot whose box starts at the origin on x and z. As a FIELD it is resolved per cell on the input; a scalar broadcasts. Must be finite.",
     },
     where: {
       type: "f32",
@@ -127,9 +185,12 @@ export const transformBox = standardNode<TransformBoxParams, TransformBoxInputs,
     // ---- params, decided ONCE: the pivot word becomes a code here, and no
     // string reaches the per-cell loop.
     const pivotName = canonicalOneOf(PIVOTS, params.pivotIn);
+    if (pivotName === undefined && (params.pivotIn as unknown) === "world") {
+      throw new Error(`${NODE}: param "pivotIn" is "world", which was renamed "origin" — ${PIVOT_RENAMED.world.why}. Write "origin" (the default). Valid: ${PIVOTS.join(", ")}.`);
+    }
     if (pivotName === undefined) {
       throw new Error(
-        `${NODE}: param "pivotIn" is ${JSON.stringify(params.pivotIn)}; valid: ${PIVOTS.join(", ")} — "world" reads pivot as a point, "cell" as a 0..1 fraction of each cell's own box ([0.5, 0.5, 0.5] is its centre), "union" as the same fraction of the bounding box of every cell transformed.`,
+        `${NODE}: param "pivotIn" is ${JSON.stringify(params.pivotIn)}; valid: ${PIVOTS.join(", ")} — "origin" reads pivot as a point in the boxes' own coordinates, "cell" as a 0..1 fraction of each cell's own box ([0.5, 0.5, 0.5] is its centre), "union" as the same fraction of the bounding box of every cell transformed.`,
       );
     }
     const pivotMode = (PIVOTS as readonly string[]).indexOf(pivotName);
@@ -172,7 +233,7 @@ export const transformBox = standardNode<TransformBoxParams, TransformBoxInputs,
         NODE,
         name,
         "cell",
-        name === "pivot" ? "a pivot is a point (or a fraction) per world axis [x, y, z]" : `a ${name} is one number per world axis [x, y, z]`,
+        name === "pivot" ? "a pivot is a point (or a fraction) per box axis [x, y, z]" : `a ${name} is one number per box axis [x, y, z]`,
       ),
     );
     const chosen = resolveWhere(src, params.where, seed, NODE, "a transform-or-leave flag");
@@ -189,6 +250,7 @@ export const transformBox = standardNode<TransformBoxParams, TransformBoxInputs,
     const uLo = [Infinity, Infinity, Infinity];
     const uHi = [-Infinity, -Infinity, -Infinity];
     if (pivotMode === PIVOT_UNION) {
+      requireSharedFrame(srcSet, n, chosen, checkCancelled);
       for (let i = 0; i < n; i++) {
         if (!chosen(i)) continue;
         for (let k = 0; k < 3; k++) {
@@ -213,7 +275,7 @@ export const transformBox = standardNode<TransformBoxParams, TransformBoxInputs,
         const pv = readComp(pCol, i, k);
         const t = readComp(tCol, i, k);
         const p =
-          pivotMode === PIVOT_WORLD
+          pivotMode === PIVOT_ORIGIN
             ? pv
             : pivotMode === PIVOT_CELL
               ? lerpExact(l0, h0, pv)

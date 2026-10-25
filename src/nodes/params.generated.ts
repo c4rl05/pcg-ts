@@ -2579,7 +2579,7 @@ export type OcclusionCullOutputs = "out";
  */
 export interface OffsetBoxParams {
   /**
-   * How far BOTH faces of each axis move OUT, per component — [x, y, z] under frame "world",
+   * How far BOTH faces of each axis move OUT, per component — [x, y, z] under frame "box",
    * [along, up, out] under "face" — in the box's own units: the uniform shorthand. [1, 1, 1]
    * pads the box one unit all round, [-1, -1, -1] insets it, [2, 0, 2] grows a footprint two
    * units each way and leaves its height. As a FIELD it is resolved per cell on the INPUT
@@ -2593,10 +2593,10 @@ export interface OffsetBoxParams {
   margin: FieldParam;
   /**
    * How far the MIN-SIDE face of each axis moves OUT, on top of `margin`, signed (negative
-   * pulls it in): under frame "world" the face the boundsMin corner is on, so marginMin [0,
-   * 1, 0] lowers the floor one unit; under "face" the end each frame axis runs FROM — the
-   * left end along (as seen from outside, on a shellSplit wall), the bottom up, the INNER
-   * face out. With marginMax it can shift the box (marginMin -d, marginMax +d moves it d).
+   * pulls it in): under frame "box" the face the boundsMin corner is on, so marginMin [0, 1,
+   * 0] lowers the floor one unit; under "face" the end each frame axis runs FROM — the left
+   * end along (as seen from outside, on a shellSplit wall), the bottom up, the INNER face
+   * out. With marginMax it can shift the box (marginMin -d, marginMax +d moves it d).
    * boxContact's marginMin, with its meaning. As a FIELD it is resolved per cell on the
    * input, and may read the box names. Must be finite.
    *
@@ -2607,7 +2607,7 @@ export interface OffsetBoxParams {
   marginMin: FieldParam;
   /**
    * How far the MAX-SIDE face of each axis moves OUT, on top of `margin`, signed: under
-   * frame "world" the face the boundsMax corner is on; under "face" the end each frame axis
+   * frame "box" the face the boundsMax corner is on; under "face" the end each frame axis
    * runs TO — the right end along, the top up, the OUTER face out, so marginMax [0, 0, 1]
    * stands a sill one unit out of whichever face of its wall is outside. boxContact's
    * marginMax, with its meaning. As a FIELD it is resolved per cell on the input, and may
@@ -2621,19 +2621,20 @@ export interface OffsetBoxParams {
   marginMax: FieldParam;
   /**
    * What the three components of the margins mean — placeBox's `frame`, with its meaning.
-   * "world": world axes [x, y, z], min side the boundsMin corner — the frame attributes are
-   * not read. "face": the cell's own axes [along, up, out] from the frame shellSplit writes
-   * (`alongAxisAttr`, `alongSignAttr`, `outwardAttr`; up is derived, completing the
+   * "box" (the default): the box's own axes [x, y, z], min side the boundsMin corner — the
+   * frame attributes are not read (it was called "world"; that word is refused with the
+   * rename stated). "face": the cell's own axes [along, up, out] from the frame shellSplit
+   * writes (`alongAxisAttr`, `alongSignAttr`, `outwardAttr`; up is derived, completing the
    * right-handed frame along x up = out), min side the end each axis runs from — so one
    * offset reads the same on every wall, floor and ceiling of a shell. Selected here, never
    * inferred: under "face" a missing frame attribute is refused, naming every one missing.
    * Decided once per cook.
    *
-   * - Enum: `"world"` | `"face"`
+   * - Enum: `"box"` | `"face"`
    *
-   * @defaultValue `"world"`
+   * @defaultValue `"box"`
    */
-  frame: "world" | "face";
+  frame: "box" | "face";
   /**
    * Read only under frame "face": the tuple-1 numeric point attribute holding each cell's
    * ALONG axis code, 0 = x, 1 = y, 2 = z — shellSplit's `alongAxisAttr`, carried by splitBox
@@ -2662,11 +2663,11 @@ export interface OffsetBoxParams {
    */
   outwardAttr: string;
   /**
-   * A LATTICE STEP per WORLD axis [x, y, z] — in every frame, since a lattice is the world's
-   * — applied after the offset to every face of each axis whose step is not 0 (0 = no
-   * snapping, the default). How depends on `snapTo` and `snapMode`. splitBox's and
-   * placeBox's snap: snap [1, 0.4, 1] keeps a box on a brick lattice of 1-stud by 1-plate
-   * cells.
+   * A LATTICE STEP per box axis [x, y, z] — in every frame, since a lattice is the box's,
+   * anchored at 0 of its coordinates (the cell's P, in its own units) — applied after the
+   * offset to every face of each axis whose step is not 0 (0 = no snapping, the default).
+   * How depends on `snapTo` and `snapMode`. splitBox's and placeBox's snap: snap [1, 0.4, 1]
+   * keeps a box on a brick lattice of 1-stud by 1-plate cells.
    *
    * - Range: `>= 0`
    *
@@ -2691,12 +2692,11 @@ export interface OffsetBoxParams {
   /**
    * Which way a face (or a size) lands on the `snap` lattice — the same five words on every
    * box node. "round" (the default): the nearest line or size, a half rounding up. "floor" /
-   * "ceil": every face down / up the WORLD axis, both the same way (the size down / up).
-   * "out": the box GROWS onto it — the min face to the line at or below it, the max face to
-   * the line at or above it, the size up — so a padded box never loses what the offset gave
-   * it. "in": it SHRINKS onto it (the reverse), which can cross the faces of a box with no
-   * whole step inside it, for `fit` to settle. Ignored where the step is 0. Decided once per
-   * cook.
+   * "ceil": every face down / up the axis, both the same way (the size down / up). "out":
+   * the box GROWS onto it — the min face to the line at or below it, the max face to the
+   * line at or above it, the size up — so a padded box never loses what the offset gave it.
+   * "in": it SHRINKS onto it (the reverse), which can cross the faces of a box with no whole
+   * step inside it, for `fit` to settle. Ignored where the step is 0. Decided once per cook.
    *
    * - Enum: `"round"` | `"floor"` | `"ceil"` | `"out"` | `"in"`
    *
@@ -4057,21 +4057,22 @@ export type PathShiftOutputs = "out";
 export interface PlaceBoxParams {
   /**
    * The axes `size`, `anchor`, `offset`, `units` and `offsetUnits` are written in —
-   * offsetBox's `frame`, with its meaning. "world" (the default): [x, y, z], positive up
-   * each axis, min the box's min corner; the frame attributes are not read. "face": [along,
-   * up, out] in each cell's own frame, read from `alongAxisAttr`, `alongSignAttr` and
-   * `outwardAttr` — the frame shellSplit writes on every face — with up derived so that
+   * offsetBox's `frame`, with its meaning. "box" (the default): [x, y, z] along the box's
+   * own axes, positive up each axis, min the box's min corner; the frame attributes are not
+   * read ("box" was called "world"; that word is refused with the rename stated). "face":
+   * [along, up, out] in each cell's own frame, read from `alongAxisAttr`, `alongSignAttr`
+   * and `outwardAttr` — the frame shellSplit writes on every face — with up derived so that
    * along x up = out. On a wall that makes component 0 run LEFT TO RIGHT AS SEEN FROM
    * OUTSIDE, component 1 bottom to top, component 2 from the inner face to the OUTER face,
    * so anchor 0 is the left, the bottom and the inner face, and anchor 1 the right, the top
    * and the outer face. Under "face" a missing frame attribute is refused, naming every one
-   * missing. Decided once per cook. `snap` is always the world lattice, whichever frame.
+   * missing. Decided once per cook. `snap` is always per box axis, whichever frame.
    *
-   * - Enum: `"world"` | `"face"`
+   * - Enum: `"box"` | `"face"`
    *
-   * @defaultValue `"world"`
+   * @defaultValue `"box"`
    */
-  frame: "world" | "face";
+  frame: "box" | "face";
   /**
    * Read only with frame "face": the numeric tuple-1 point attribute holding each cell's
    * ALONG axis code, 0 = x, 1 = y, 2 = z — shellSplit's `alongAxisAttr` default, carried by
@@ -4186,14 +4187,14 @@ export interface PlaceBoxParams {
    */
   fit: "error" | "allow" | "clamp" | "clip";
   /**
-   * A LATTICE STEP per WORLD axis [x, y, z] (whichever `frame`), 0 for none — offsetBox's
+   * A LATTICE STEP per box axis [x, y, z] (whichever `frame`), 0 for none — offsetBox's
    * `snap`. How the placed box lands on it is `snapTo` and `snapMode`, applied after the
-   * placement and before `fit`; under `snapTo` "lattice" the lattice is the absolute one
-   * anchored at 0 — splitBox's `snap` lattice, so a cut and a placement on the same lattice
-   * share its lines. A corner within f32 precision of a line counts as on it. A snap can
-   * move a corner outside the cell (refused under fit "error"). On an integer lattice whose
-   * cells are integer, anchor 0.5 with snap [1, 1, 1] and snapMode "floor" places a box as
-   * nearly centred as whole units allow.
+   * placement and before `fit`; under `snapTo` "lattice" the lattice is anchored at 0 of the
+   * box's coordinates — the cell's P, in its own units — splitBox's `snap` lattice, so a cut
+   * and a placement on the same lattice share its lines. A corner within f32 precision of a
+   * line counts as on it. A snap can move a corner outside the cell (refused under fit
+   * "error"). On an integer lattice whose cells are integer, anchor 0.5 with snap [1, 1, 1]
+   * and snapMode "floor" places a box as nearly centred as whole units allow.
    *
    * - Range: `>= 0`
    *
@@ -4214,12 +4215,12 @@ export interface PlaceBoxParams {
   /**
    * How the box lands on the `snap` lattice — the same five words on every box node. "round"
    * (the default): each corner to the nearest line (a half rounds up), or the size to the
-   * nearest whole step. "floor" / "ceil": each corner down / up the WORLD axis, both the
-   * same way, so a box a whole number of steps long keeps its size (the size rounds down /
-   * up). "out": the box GROWS onto the lattice — its min corner down, its max corner up (the
-   * size up). "in": it SHRINKS onto it, the reverse (the size down); a box with no whole
-   * step inside it becomes a box of no volume at its centre. Ignored where the step is 0.
-   * Decided once per cook.
+   * nearest whole step. "floor" / "ceil": each corner down / up the axis, both the same way,
+   * so a box a whole number of steps long keeps its size (the size rounds down / up). "out":
+   * the box GROWS onto the lattice — its min corner down, its max corner up (the size up).
+   * "in": it SHRINKS onto it, the reverse (the size down); a box with no whole step inside
+   * it becomes a box of no volume at its centre. Ignored where the step is 0. Decided once
+   * per cook.
    *
    * - Enum: `"round"` | `"floor"` | `"ceil"` | `"out"` | `"in"`
    *
@@ -6567,13 +6568,13 @@ export type SplineSampleOutputs = "out";
 export interface SplitBoxParams {
   /**
    * The axis every cell is cut along: "x", "y" or "z" — a component of the cell's
-   * boundsMin/boundsMax, not a direction in the cell's rotated frame. "perCell" reads the
-   * axis PER CELL from `axisIndex` instead, for a split whose direction is the cell's own —
-   * a wall cut along its run, which is x for a south wall and z for an east one. "longest"
-   * cuts each cell along ITS LONGEST SPAN among the axes `longestOf` names (all three by
-   * default; "xz" for the longer floor axis), the cut of a recursive subdivision that halves
-   * a panel or a plan across its long side. Decided once per cook; with "perCell" or
-   * "longest" only numbers are read per cell.
+   * boundsMin/boundsMax: the box's OWN axis, which turns with the point's rot, not a world
+   * direction. "perCell" reads the axis PER CELL from `axisIndex` instead, for a split whose
+   * direction is the cell's own — a wall cut along its run, which is x for a south wall and
+   * z for an east one. "longest" cuts each cell along ITS LONGEST SPAN among the axes
+   * `longestOf` names (all three by default; "xz" for the longer floor axis), the cut of a
+   * recursive subdivision that halves a panel or a plan across its long side. Decided once
+   * per cook; with "perCell" or "longest" only numbers are read per cell.
    *
    * - Enum: `"x"` | `"y"` | `"z"` | `"perCell"` | `"longest"`
    *
@@ -6584,32 +6585,35 @@ export interface SplitBoxParams {
    * Read ONLY when `axis` is "longest" (ignored otherwise): the axes a cell's longest span
    * is chosen from — "xyz" (the default) all three, "xz" the floor plane (a plan cut across
    * its longer wall whatever its height), "xy" or "yz". A span is boundsMax - boundsMin
-   * along the axis. The measured longest wins. A TIE goes to the FIRST axis of the set in x,
-   * y, z order, and a tie is only what f32 storage cannot resolve: a stored span is off its
-   * intended length by at most half an f32 step at each of its two corners, its own error,
-   * from ITS OWN coordinates. An axis can win when it COULD be the longest — its span plus
-   * its error reaches every other axis' span minus that axis' error — and the first such
-   * axis in x, y, z order does. A square cell, or spans written as the same decimal, are
-   * therefore cut along the first axis wherever they stand, not along whichever axis the
-   * stored corners happen to round longer, while a span longer than another by more than
-   * both their storage can explain always beats it (at z = 1e5, where a step is 1/128, a z
-   * span of 1 + 2/128 beats an x span of 1 at the origin; 1 + 1/128 ties, and goes to x; at
-   * z = 2^23, where a step is 1, a z span of 2 is known only to 1 and ties both an x of 1
-   * and a y of 1.5, but y is longer than x past both their storage, so x cannot be the
-   * longest and y is cut). The bound is half a step for a corner rounded once; a corner an
-   * earlier cut made was rounded twice, so a square made by halving can, rarely (about 1 in
-   * 18,000), go to its second axis by a difference at the seventh digit — a full step a
-   * corner would stop that, but would hand far more boxes far from the origin to a visibly
-   * shorter axis. AN AXIS THE CUT CANNOT CUT IS PASSED OVER: if the cut along the preferred
-   * axis comes back whole (fewer than 2 pieces), the other candidates are tried longest
-   * first and the first that cuts is taken, else the preferred stands — so a box 1 wide at x
-   * = 1e7, where an f32 step is 1 and a half-way cut rounds onto a corner, is cut along a
-   * tied z span of 1.9 instead. Only the preferred axis can refuse a cell: a fallback whose
-   * sizes `fit` "error" refuses (overflow, underfill) is passed over, but the point cap is
-   * still the cook's, and a fallback that runs into it refuses the cook. A zero-size box is
-   * cut along the first axis of the set. A cell whose box is not finite, or is inside out,
-   * along any axis of the set is refused naming the cell, since it has no longest span; a
-   * cell `where` passes through is not read.
+   * along the axis, in the box's own units: a non-uniform `scale` on the point is not
+   * applied, so with one the longest is the longest in the box's units (bake the scale into
+   * the box first, e.g. transformBox scale attribute("scale", 3) then setAttribute scale [1,
+   * 1, 1], to cut the longest in the world). The measured longest wins. A TIE goes to the
+   * FIRST axis of the set in x, y, z order, and a tie is only what f32 storage cannot
+   * resolve: a stored span is off its intended length by at most half an f32 step at each of
+   * its two corners, its own error, from ITS OWN coordinates. An axis can win when it COULD
+   * be the longest — its span plus its error reaches every other axis' span minus that axis'
+   * error — and the first such axis in x, y, z order does. A square cell, or spans written
+   * as the same decimal, are therefore cut along the first axis wherever they stand, not
+   * along whichever axis the stored corners happen to round longer, while a span longer than
+   * another by more than both their storage can explain always beats it (at z = 1e5, where a
+   * step is 1/128, a z span of 1 + 2/128 beats an x span of 1 at the origin; 1 + 1/128 ties,
+   * and goes to x; at z = 2^23, where a step is 1, a z span of 2 is known only to 1 and ties
+   * both an x of 1 and a y of 1.5, but y is longer than x past both their storage, so x
+   * cannot be the longest and y is cut). The bound is half a step for a corner rounded once;
+   * a corner an earlier cut made was rounded twice, so a square made by halving can, rarely
+   * (about 1 in 18,000), go to its second axis by a difference at the seventh digit — a full
+   * step a corner would stop that, but would hand far more boxes far from the origin to a
+   * visibly shorter axis. AN AXIS THE CUT CANNOT CUT IS PASSED OVER: if the cut along the
+   * preferred axis comes back whole (fewer than 2 pieces), the other candidates are tried
+   * longest first and the first that cuts is taken, else the preferred stands — so a box 1
+   * wide at x = 1e7, where an f32 step is 1 and a half-way cut rounds onto a corner, is cut
+   * along a tied z span of 1.9 instead. Only the preferred axis can refuse a cell: a
+   * fallback whose sizes `fit` "error" refuses (overflow, underfill) is passed over, but the
+   * point cap is still the cook's, and a fallback that runs into it refuses the cook. A
+   * zero-size box is cut along the first axis of the set. A cell whose box is not finite, or
+   * is inside out, along any axis of the set is refused naming the cell, since it has no
+   * longest span; a cell `where` passes through is not read.
    *
    * - Enum: `"xyz"` | `"xy"` | `"xz"` | `"yz"`
    *
@@ -6691,15 +6695,17 @@ export interface SplitBoxParams {
   /**
    * A LATTICE STEP per axis [x, y, z]; the component of the axis a cell is cut along applies
    * to it, and 0 means no snapping. Every INTERIOR cut is moved onto a multiple of the step
-   * on an ABSOLUTE lattice anchored at 0 — the cell's own min and max are never moved, so
-   * the pieces tile the cell exactly (except under `fit` "clip", where an underfill leaves
-   * the far end uncovered and the end of the covered run is snapped like any interior cut) —
-   * and is then clamped into the cell. Absolute rather than cell-relative, so two
-   * neighbouring cells agree on one lattice (a packer's). A cut within f32 precision of a
-   * lattice line counts as on it, so a box edge stored as 1.2000000477 stays on a 0.4
-   * lattice. Snapping can shrink a piece to nothing, and that piece is dropped. On an
-   * integer lattice whose cells are already integer, snap [1, 1, 1] with snapMode "floor"
-   * turns a repeat into u0 + floor(k * length / n) — whole-number bays.
+   * on a lattice anchored at 0 of the box's coordinates — the cell's P, in its own units,
+   * not its min corner — the cell's own min and max are never moved, so the pieces tile the
+   * cell exactly (except under `fit` "clip", where an underfill leaves the far end uncovered
+   * and the end of the covered run is snapped like any interior cut) — and is then clamped
+   * into the cell. Anchored at P rather than at the cell's corner, so neighbouring cells
+   * that share a frame — every piece of one root does — agree on one lattice (a packer's). A
+   * cut within f32 precision of a lattice line counts as on it, so a box edge stored as
+   * 1.2000000477 stays on a 0.4 lattice. Snapping can shrink a piece to nothing, and that
+   * piece is dropped. On an integer lattice whose cells are already integer, snap [1, 1, 1]
+   * with snapMode "floor" turns a repeat into u0 + floor(k * length / n) — whole-number
+   * bays.
    *
    * - Range: `>= 0`
    *
@@ -6746,13 +6752,13 @@ export interface SplitBoxParams {
    * side: the first label sits at the max end and is slot 0, a repeat counts from there,
    * `fit` "clip" cuts at the MIN end and an underfill leaves the min end uncovered, with the
    * same seeds per slot. Without `snap` that is the forward split mirrored. WITH `snap` it
-   * is not: the lattice stays the ABSOLUTE one anchored at world 0, and "floor" and "ceil"
-   * keep their world meaning (down and up the axis), so neighbouring cells cut in either
-   * direction still share one lattice — box [0, 10], absolute sizes [3, 7], snap 4: forward
-   * the first piece is [0, 4], reversed it is [8, 10] (the raw cut at 7 rounds to 8), not
-   * the mirror image [6, 10]. As a field it is resolved per cell, so one node can cut every
-   * wall of a shell from its own start: shellSplit writes `alongSign` (+1 or -1) so that,
-   * seen from outside, along runs left to right on every wall, and direction
+   * is not: the lattice stays the one anchored at 0 of the box's coordinates, and "floor"
+   * and "ceil" keep their meaning (down and up the axis), so neighbouring cells cut in
+   * either direction still share one lattice — box [0, 10], absolute sizes [3, 7], snap 4:
+   * forward the first piece is [0, 4], reversed it is [8, 10] (the raw cut at 7 rounds to
+   * 8), not the mirror image [6, 10]. As a field it is resolved per cell, so one node can
+   * cut every wall of a shell from its own start: shellSplit writes `alongSign` (+1 or -1)
+   * so that, seen from outside, along runs left to right on every wall, and direction
    * attribute("alongSign") with axisIndex attribute("alongAxis") puts slot 0 at the left of
    * each. Read only its sign; a non-finite value is refused naming the cell.
    *
@@ -7607,12 +7613,12 @@ export type TransferByIndexOutputs = "out";
  */
 export interface TransformBoxParams {
   /**
-   * The scale per WORLD axis [x, y, z], about the pivot: 1 keeps the axis, 0.5 halves it, 2
+   * The scale per box axis [x, y, z], about the pivot: 1 keeps the axis, 0.5 halves it, 2
    * doubles it, a negative value mirrors the box about the pivot (its faces swapped, so
    * boundsMin stays the min), and 0 leaves a box of no volume on the pivot. [1, 0.4, 1]
-   * takes a lattice counted in studs across and plates up to world units where a plate is
-   * 0.4 of a stud. As a FIELD it is resolved per cell on the INPUT (box names read the box
-   * as it arrived) and a scalar broadcasts to all three. Must be finite.
+   * takes a lattice counted in studs across and plates up to units where a plate is 0.4 of a
+   * stud. As a FIELD it is resolved per cell on the INPUT (box names read the box as it
+   * arrived) and a scalar broadcasts to all three. Must be finite.
    *
    * - Accepts a field.
    *
@@ -7620,13 +7626,13 @@ export interface TransformBoxParams {
    */
   scale: FieldParam;
   /**
-   * The point the scale is about, per WORLD axis, read as `pivotIn` says: under "world" a
-   * point in the boxes' coordinates (the default [0, 0, 0] is the origin); under "cell" a
-   * fraction of the cell's own box (0 the min face, 0.5 the centre, 1 the max face —
-   * placeBox's anchor reading); under "union" the same fraction of the bounding box of every
-   * cell transformed. The pivot does not move: a box face on it stays where it is, whatever
-   * the scale. As a FIELD it is resolved per cell on the input; a scalar broadcasts. Must be
-   * finite.
+   * The point the scale is about, per box axis, read as `pivotIn` says: under "origin" a
+   * point in the boxes' own coordinates (the default [0, 0, 0] is their origin, the cell's
+   * P); under "cell" a fraction of the cell's own box (0 the min face, 0.5 the centre, 1 the
+   * max face — placeBox's anchor reading); under "union" the same fraction of the bounding
+   * box of every cell transformed. The pivot does not move: a box face on it stays where it
+   * is, whatever the scale. As a FIELD it is resolved per cell on the input; a scalar
+   * broadcasts. Must be finite.
    *
    * - Accepts a field.
    *
@@ -7634,24 +7640,27 @@ export interface TransformBoxParams {
    */
   pivot: FieldParam;
   /**
-   * What `pivot` is measured in. "world" (the default): a point in the boxes' own
-   * coordinates. "cell": a 0..1 fraction of each cell's OWN box per axis, so [0.5, 0.5, 0.5]
-   * scales every box about its own centre — which opens (or closes) the gaps between
-   * neighbours. "union": the same fraction of the bounding box of EVERY cell this cook
-   * transforms (those `where` selects), one pivot for the whole assembly, so boxes that
+   * What `pivot` is measured in. "origin" (the default): a point in the boxes' own
+   * coordinates, [0, 0, 0] the cell's P (it was called "world"; that word is refused with
+   * the rename stated). "cell": a 0..1 fraction of each cell's OWN box per axis, so [0.5,
+   * 0.5, 0.5] scales every box about its own centre — which opens (or closes) the gaps
+   * between neighbours. "union": the same fraction of the bounding box of EVERY cell this
+   * cook transforms (those `where` selects), one pivot for the whole assembly, so boxes that
    * touched still touch — [0.5, 0, 0.5] scales a building about the middle of its footprint,
-   * at ground level. Decided once per cook.
+   * at ground level. The chosen cells must share one P, rot and scale bit for bit (corners
+   * in different frames have no common box); cells that do not are refused, naming two.
+   * Decided once per cook.
    *
-   * - Enum: `"world"` | `"cell"` | `"union"`
+   * - Enum: `"origin"` | `"cell"` | `"union"`
    *
-   * @defaultValue `"world"`
+   * @defaultValue `"origin"`
    */
-  pivotIn: "world" | "cell" | "union";
+  pivotIn: "origin" | "cell" | "union";
   /**
-   * How far every box moves AFTER the scale, per WORLD axis, in the output's units: [0, 0,
-   * 0] (the default) leaves it on the pivot's frame. A field reading a per-cell attribute
-   * moves each cell by its own amount — mul(attribute("lot", 3), [-0.5, 0, -0.5]) centres a
-   * lot whose box starts at the origin on x and z. As a FIELD it is resolved per cell on the
+   * How far every box moves AFTER the scale, per box axis, in the output's units: [0, 0, 0]
+   * (the default) leaves it on the pivot's frame. A field reading a per-cell attribute moves
+   * each cell by its own amount — mul(attribute("lot", 3), [-0.5, 0, -0.5]) centres a lot
+   * whose box starts at the origin on x and z. As a FIELD it is resolved per cell on the
    * input; a scalar broadcasts. Must be finite.
    *
    * - Accepts a field.

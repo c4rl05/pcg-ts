@@ -1,9 +1,9 @@
 /**
  * `offsetBox`: every cell's box with each face moved out (or in) by a
- * signed offset, in world axes or in the face frame shellSplit writes.
+ * signed offset, along the box's own axes or in the face frame shellSplit writes.
  *
  * Expectations come from an ORACLE written here from the param
- * descriptions — the world reading of each margin, and the face frame read
+ * descriptions — the box-frame reading of each margin, and the face frame read
  * from shellSplit's OWN up attributes (which the node does not read: it
  * derives up from along x up = out) — never recorded from a run.
  * Coordinates are dyadic wherever a sum is compared, so "exact" is exact.
@@ -126,7 +126,7 @@ function collectionBytes(c: DataCollection | undefined): unknown {
 
 // ---------------------------------------------------------------------------
 
-describe("offsetBox: world frame", () => {
+describe("offsetBox: box frame", () => {
   it("moves each face by margin + its side's own, against an oracle over random boxes and offsets", async () => {
     const rng = new Pcg32(7);
     const list: Box[] = [];
@@ -164,7 +164,7 @@ describe("offsetBox: world frame", () => {
     ]);
   });
 
-  it("changes nothing but the box: P, rot, scale, seeds, attributes, topology carried; a ROTATED cell offsets as an unrotated one", async () => {
+  it("changes nothing but the box: P, rot, scale, seeds, attributes, topology carried; a ROTATED cell offsets in its own (local) box, blind to its transform", async () => {
     const make = (rotated: boolean): Geometry => {
       const line = createPolyline([0, 0, 0, 1, 2, 3, 4, 5, 6]);
       const pts = line.attrs.point;
@@ -302,7 +302,7 @@ describe("offsetBox: face frame", () => {
     });
   });
 
-  it("reads renamed frame attributes, and is the world reading under frame \"world\" whatever they hold", async () => {
+  it("reads renamed frame attributes, and is the box reading under frame \"box\" whatever they hold", async () => {
     const pieces = await sixFaces();
     const geo = await shell(cells([[[0, 0, 0], [8, 6, 4]]]), {
       alongAxisAttr: "aA",
@@ -347,7 +347,7 @@ describe("offsetBox: snap", () => {
     expect(boxes(await offset(cells([[[-0.5, 0, 0], [0.5, 1, 1]]]), { snap: [1, 0, 0], snapMode: "out" }))).toEqual([[[-1, 0, 0], [1, 1, 1]]]);
     // The default is "round", a half rounding up: -0.5 goes to 0, 0.5 to 1.
     expect(boxes(await offset(cells([[[-0.5, 0, 0], [0.5, 1, 1]]]), { snap: [1, 0, 0] }))).toEqual([[[0, 0, 0], [1, 1, 1]]]);
-    // "floor" and "ceil" move both faces the same way down / up the world axis.
+    // "floor" and "ceil" move both faces the same way down / up the axis.
     expect(boxes(await offset(geo, { snap, snapMode: "floor" }))).toEqual([[[0, 0, F(0.1)], [2, F(1.2), F(0.9)]]]);
     expect(boxes(await offset(geo, { snap, snapMode: "ceil" }))).toEqual([[[1, F(0.4), F(0.1)], [3, F(1.6), F(0.9)]]]);
   });
@@ -512,9 +512,31 @@ describe("offsetBox: collapse (fit)", () => {
 describe("offsetBox: refusals", () => {
   const one = (): Geometry => cells([[[0, 0, 0], [4, 4, 4]]]);
 
+  it('a graph FILE with frame "world" is refused on load, naming the rename and the fix — offsetBox and placeBox alike', () => {
+    for (const type of ["offsetBox", "placeBox"]) {
+      const doc = {
+        formatVersion: 1,
+        seed: 1,
+        nodes: [
+          { id: "grid", type: "pointGrid", params: {} },
+          { id: "b", type, params: { frame: "world" } },
+        ],
+        connections: [{ from: ["grid", "out"], to: ["b", "in"] }],
+        outputs: [{ id: "b", pin: "out", name: "out" }],
+      };
+      expect(() => deserializeGraph(doc as never)).toThrow(/node "b" param "frame": "world" was renamed "box" — a cell's box is an extent in its point's OWN frame.*; write "box" \(expected one of "box", "face"\)/);
+    }
+  });
+
+  it('refuses the old frame word "world", stating the rename to "box"', async () => {
+    const msg = await rejection(offset(one(), { frame: "world" }));
+    expect(msg).toMatch(/^offsetBox: param "frame" is "world", which was renamed "box" — a cell's box is an extent in its point's OWN frame/);
+    expect(msg).toContain('Write "box" (the default)');
+  });
+
   it("refuses unknown enum strings, naming the valid ones", async () => {
     expect(await rejection(offset(one(), { frame: "local" }))).toBe(
-      'offsetBox: param "frame" is "local"; valid: world, face — "face" is the frame shellSplit writes (along, up, out), read from alongAxisAttr, alongSignAttr and outwardAttr.',
+      'offsetBox: param "frame" is "local"; valid: box, face — "face" is the frame shellSplit writes (along, up, out), read from alongAxisAttr, alongSignAttr and outwardAttr.',
     );
     expect(await rejection(offset(one(), { fit: "squash" }))).toBe('offsetBox: param "fit" is "squash"; valid: error, scale, allow.');
     // A fit word of the other box nodes is refused naming why it means nothing here.
@@ -548,12 +570,12 @@ describe("offsetBox: refusals", () => {
     expect(await rejection(offset(bad))).toContain("cell 0's box is not finite along x");
   });
 
-  it("frame \"face\": a missing frame attribute is refused by name, with a suggestion — never a silent world reading", async () => {
+  it("frame \"face\": a missing frame attribute is refused by name, with a suggestion — never a silent box-frame reading", async () => {
     const msg = await rejection(offset(one(), { frame: "face", marginMax: [0, 0, 1] }));
     expect(msg).toContain('offsetBox: frame "face" reads each cell\'s frame from three point attributes');
     expect(msg).toContain('there is no "alongAxis" (param "alongAxisAttr", the along axis)');
     expect(msg).toContain('there is no "outward" (param "outwardAttr", the outward normal)');
-    expect(msg).toContain('set frame to "world"');
+    expect(msg).toContain('set frame to "box"');
     const pieces = await sixFaces();
     const typo = await rejection(offset(pieces, { frame: "face", outwardAttr: "outwards" }));
     expect(typo).toContain('did you mean "outward"?');

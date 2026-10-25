@@ -567,7 +567,7 @@ describe("shellSplit: the documented idioms, on every wall", () => {
 });
 
 describe("shellSplit: frames (continued)", () => {
-  it("box names keep their world meaning: box(\"sx\") is the x extent on every face", async () => {
+  it("box names keep the box's own axes: box(\"sx\") is the x extent on every face", async () => {
     const out = await shell(worked(), { thickness: WORKED_T });
     const sx = firstGeo(
       (await runNode(setAttribute, { name: "sx", type: "f32", value: f('box("sx")') }, { in: [makeGeometryItem(out)] })).out,
@@ -577,7 +577,7 @@ describe("shellSplit: frames (continued)", () => {
 });
 
 describe("shellSplit: rotated and moved cells", () => {
-  it("reads the box as stored: P, rot and scale are not read, and ride onto every piece", async () => {
+  it("splits the box in its own (local) coordinates, blind to the transform, which rides onto every piece bit for bit (tests/localBoxes.test.ts runs this on random cells)", async () => {
     const plain = await shell(worked(), { thickness: WORKED_T });
     const geo = worked();
     const q = [0, Math.SQRT1_2, 0, Math.SQRT1_2];

@@ -21,8 +21,22 @@ import { canonicalOneOf } from "../diagnostics/canonical.js";
 import { suggestNames } from "../diagnostics/didYouMean.js";
 import type { Attribute } from "../data/index.js";
 
-/** The `frame` param of a box node. */
-export const BOX_FRAMES = ["world", "face"] as const;
+/**
+ * The `frame` param of a box node. "box" reads a vec3 along the box's own
+ * axes — its stored x, y, z, which turn with the point's rot — and "face"
+ * along the face frame below. "box" was "world" until the box nodes read
+ * bounds as an extent local to the point's transform; the old word is
+ * refused with the rename stated ({@link decodeBoxFrame}).
+ */
+export const BOX_FRAMES = ["box", "face"] as const;
+
+/** Why "world" became "box": the schema's `renamed` entry, and the direct-call refusal's text. */
+export const BOX_FRAME_RENAMED = {
+  world: {
+    to: "box",
+    why: "a cell's box is an extent in its point's OWN frame (world = P + rot * (scale * x)), so the axes this frame reads are the box's, not the world's; the reading is the same [x, y, z]",
+  },
+} as const;
 /** The three components of a face-frame vec3, in order. */
 export const FACE_AXIS_NAMES = ["along", "up", "out"] as const;
 const AXIS_NAMES = ["x", "y", "z"] as const;
@@ -40,8 +54,10 @@ const AXIS_NAMES = ["x", "y", "z"] as const;
  * OUTWARD on every face — the shellSplit test checks that cross product,
  * and the faceFrame test that {@link decodeFaceFrame} derives this up from
  * this along and out. On a wall up is +y and along runs left to right as
- * seen from outside. The interior faces nowhere: its frame is the world's
- * (along +x, up +y, out z), its side 0 and its outward normal zero.
+ * seen from outside. The interior faces nowhere: its frame is the box's
+ * own axes (along +x, up +y, out z), its side 0 and its outward normal
+ * zero. Every code names a side of the box in its OWN axes, so on a
+ * rotated cell "south" is the min-z side of the box, wherever that faces.
  */
 export const FACE_NAMES = ["floor", "south", "north", "west", "east", "ceiling"] as const;
 export const FACE_ALONG = [0, 0, 0, 2, 2, 0, 0] as const;
@@ -87,10 +103,14 @@ export interface FaceFrameColumns extends FaceFrameParams {
 
 /**
  * The `frame` param of `placeBox` and `offsetBox`, decided once: true for
- * "face", false for "world", or a refusal naming both.
+ * "face", false for "box", or a refusal naming both — the old word "world"
+ * with the rename stated.
  */
 export function decodeBoxFrame(node: string, value: unknown): boolean {
   const frame = canonicalOneOf(BOX_FRAMES, value);
+  if (frame === undefined && value === "world") {
+    throw new Error(`${node}: param "frame" is "world", which was renamed "box" — ${BOX_FRAME_RENAMED.world.why}. Write "box" (the default). Valid: ${BOX_FRAMES.join(", ")}.`);
+  }
   if (frame === undefined) {
     throw new Error(
       `${node}: param "frame" is ${JSON.stringify(value)}; valid: ${BOX_FRAMES.join(", ")} — "face" is the frame shellSplit writes (along, up, out), read from alongAxisAttr, alongSignAttr and outwardAttr.`,
@@ -136,7 +156,7 @@ export function readFaceFrame(
   }
   if (problems.length > 0) {
     throw new Error(
-      `${node}: frame "face" reads each cell's frame from three point attributes — the along axis, its sign and the outward normal — and the input on pin "in" cannot give ${problems.length === 1 ? "one of them" : `${problems.length} of them`}: ${problems.join("; ")}. shellSplit writes all three (alongAxis, alongSign, outward) and splitBox carries them onto every piece cut from a face; split the cells with shellSplit first, point the params at the attributes that hold the frame, or set frame to "world".`,
+      `${node}: frame "face" reads each cell's frame from three point attributes — the along axis, its sign and the outward normal — and the input on pin "in" cannot give ${problems.length === 1 ? "one of them" : `${problems.length} of them`}: ${problems.join("; ")}. shellSplit writes all three (alongAxis, alongSign, outward) and splitBox carries them onto every piece cut from a face; split the cells with shellSplit first, point the params at the attributes that hold the frame, or set frame to "box".`,
     );
   }
   return {
@@ -154,7 +174,7 @@ const NO_FACE =
   " — what shellSplit leaves on a cell its `where` passed through, and what boxContact writes on a pair that touches only along an edge or at a corner: neither has a face, so neither has a frame";
 
 /**
- * Cell `i`'s frame: `axis[c]` and `sign[c]` (+1 / -1) are the world axis
+ * Cell `i`'s frame: `axis[c]` and `sign[c]` (+1 / -1) are the box axis
  * and direction of frame component c (along, up, out). Refuses, naming the
  * cell, a frame that is not one: an along axis that is not 0, 1 or 2 (or
  * is the out axis), a zero or non-finite sign, an outward normal that is
@@ -168,12 +188,12 @@ export function decodeFaceFrame(node: string, cols: FaceFrameColumns, i: number,
   // (-1, 0, [0, 0, 0]), and that is the thing to say about it.
   if (!(av === 0 || av === 1 || av === 2)) {
     throw new Error(
-      `${node}: frame "face" needs cell ${i}'s along axis ("${cols.alongAxisAttr}") to be 0 (x), 1 (y) or 2 (z), and it is ${av}${av === -1 ? NO_FACE : ""}. Leave such cells out with "where", e.g. where ge(attribute("${cols.alongAxisAttr}"), 0), or use frame "world".`,
+      `${node}: frame "face" needs cell ${i}'s along axis ("${cols.alongAxisAttr}") to be 0 (x), 1 (y) or 2 (z), and it is ${av}${av === -1 ? NO_FACE : ""}. Leave such cells out with "where", e.g. where ge(attribute("${cols.alongAxisAttr}"), 0), or use frame "box".`,
     );
   }
   if (!(sv > 0 || sv < 0) || !Number.isFinite(sv)) {
     throw new Error(
-      `${node}: frame "face" needs cell ${i}'s along sign ("${cols.alongSignAttr}") to be +1 or -1, and it is ${sv}${sv === 0 ? NO_FACE : ""}. Leave such cells out with "where", or use frame "world".`,
+      `${node}: frame "face" needs cell ${i}'s along sign ("${cols.alongSignAttr}") to be +1 or -1, and it is ${sv}${sv === 0 ? NO_FACE : ""}. Leave such cells out with "where", or use frame "box".`,
     );
   }
   const n = cols.outward;
@@ -188,12 +208,12 @@ export function decodeFaceFrame(node: string, cols: FaceFrameColumns, i: number,
   const ov = outAxis < 0 ? 0 : n[i * 3 + outAxis];
   if (nonzero !== 1 || !Number.isFinite(ov)) {
     throw new Error(
-      `${node}: frame "face" needs ONE signed axis as cell ${i}'s outward normal ("${cols.outwardAttr}"), and it is [${n[i * 3]}, ${n[i * 3 + 1]}, ${n[i * 3 + 2]}] — ${nonzero === 0 ? "a zero normal faces nowhere (shellSplit's interior), so the cell has no out axis" : "a tilted normal does not name a face of an axis-aligned box"}. Leave such cells out with "where" (shellSplit's interior is face 6: where lt(attribute("face"), 6)), or use frame "world".`,
+      `${node}: frame "face" needs ONE signed axis as cell ${i}'s outward normal ("${cols.outwardAttr}"), and it is [${n[i * 3]}, ${n[i * 3 + 1]}, ${n[i * 3 + 2]}] — ${nonzero === 0 ? "a zero normal faces nowhere (shellSplit's interior), so the cell has no out axis" : "a tilted normal does not name a face of an axis-aligned box"}. Leave such cells out with "where" (shellSplit's interior is face 6: where lt(attribute("face"), 6)), or use frame "box".`,
     );
   }
   if (av === outAxis) {
     throw new Error(
-      `${node}: frame "face" needs cell ${i}'s along axis ("${cols.alongAxisAttr}") to lie IN the face, not along its outward normal ("${cols.outwardAttr}"), and both are ${AXIS_NAMES[av]} (${av}). A face's along and out are different axes; check the node that wrote this frame, or use frame "world".`,
+      `${node}: frame "face" needs cell ${i}'s along axis ("${cols.alongAxisAttr}") to lie IN the face, not along its outward normal ("${cols.outwardAttr}"), and both are ${AXIS_NAMES[av]} (${av}). A face's along and out are different axes; check the node that wrote this frame, or use frame "box".`,
     );
   }
   const oS = ov > 0 ? 1 : -1;

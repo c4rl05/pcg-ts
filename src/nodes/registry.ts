@@ -151,6 +151,7 @@ function copySchema(schema: ParamSchema): ParamSchema {
     min?: number;
     max?: number;
     acceptsInfinite?: boolean;
+    renamed?: ParamSchema["renamed"];
   } = {
     type: schema.type,
     default: copyParamValue(schema.default),
@@ -161,6 +162,9 @@ function copySchema(schema: ParamSchema): ParamSchema {
   if (schema.min !== undefined) copy.min = schema.min;
   if (schema.max !== undefined) copy.max = schema.max;
   if (schema.acceptsInfinite !== undefined) copy.acceptsInfinite = schema.acceptsInfinite;
+  if (schema.renamed !== undefined) {
+    copy.renamed = Object.fromEntries(Object.entries(schema.renamed).map(([k, v]) => [k, { to: v.to, why: v.why }]));
+  }
   return copy;
 }
 

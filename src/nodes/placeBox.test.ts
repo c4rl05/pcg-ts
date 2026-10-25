@@ -1,6 +1,6 @@
 /**
  * `placeBox`: a box placed inside, or against, each cell's own box by size,
- * anchor and offset per axis, in the world frame or the frame shellSplit
+ * anchor and offset per axis, in the box frame or the frame shellSplit
  * writes.
  *
  * Expectations are written out by hand from the cell and the params, never
@@ -136,7 +136,7 @@ const dyadic = (r: () => number, lo: number, hi: number, den = 8): number => lo 
 
 // ---------------------------------------------------------------------------
 
-describe("placeBox: layout in the world frame", () => {
+describe("placeBox: layout in the box frame", () => {
   it("defaults to a unit box centred in the cell", async () => {
     const out = await place(worked());
     expect(boxes(out)).toEqual([[[3.5, 2.5, 1.5], [4.5, 3.5, 2.5]]]);
@@ -327,7 +327,7 @@ describe("placeBox: the frame shellSplit writes", () => {
     expect(boxes(out)).toEqual([[[0, 0, 3], [2, 3, 4]]]);
   });
 
-  it("is the world frame on a cell whose frame is the world's", async () => {
+  it("is the box frame on a cell whose face frame is the box's own axes", async () => {
     const geo = worked();
     const pts = geo.attrs.point;
     pts.add("alongAxis", "i32", 1, 0);
@@ -341,7 +341,7 @@ describe("placeBox: the frame shellSplit writes", () => {
 });
 
 describe("placeBox: rotated cells, carried attributes and seeds", () => {
-  it("places a rotated cell in its STORED box and leaves P, rot, scale, seed and every attribute as they were", async () => {
+  it("places a rotated cell in its own (stored, local) box, blind to its transform, and carries P, rot, scale, seed and every attribute as they were", async () => {
     const geo = cells([
       [[0, 0, 0], [4, 4, 4]],
       [[10, 0, 0], [12, 2, 6]],
@@ -358,7 +358,7 @@ describe("placeBox: rotated cells, carried attributes and seeds", () => {
     const out = await place(geo, { size: [1, 1, 1], anchor: [0, 0, 1] });
     expect(boxes(out)).toEqual([
       [[0, 0, 3], [1, 1, 4]],
-      [[10, 0, 5], [11, 1, 6]], // the stored box, the rotation not read
+      [[10, 0, 5], [11, 1, 6]], // the box's own coordinates: the transform is carried, never read (tests/localBoxes.test.ts)
     ]);
     const before = snapshotGeometry(geo) as Record<string, { attrs: { name: string }[] }>;
     const after = snapshotGeometry(out) as Record<string, { attrs: { name: string }[] }>;
@@ -494,7 +494,7 @@ describe("placeBox: fit, snap, boxes of no volume, where and the label", () => {
     expect(boxes(await place(worked(), { ...params, fit: "clip" }))).toEqual([[[0, 0, 4], [0, 1, 4]]]);
   });
 
-  it("snaps both corners onto the world lattice: as nearly centred as whole units allow", async () => {
+  it("snaps both corners onto the lattice: as nearly centred as whole units allow", async () => {
     const geo = cells([[[0, 0, 0], [7, 6, 5]]]);
     // Centred x is [2.5, 4.5], z [1.5, 3.5]: floor both corners.
     const out = await place(geo, { size: [2, 1, 2], anchor: [0.5, 0, 0.5], snap: [1, 1, 1], snapMode: "floor" });
@@ -587,8 +587,9 @@ describe("placeBox: fit, snap, boxes of no volume, where and the label", () => {
 
 describe("placeBox: refusals", () => {
   const cases: [string, Record<string, unknown>, string | RegExp][] = [
-    ["an unknown frame", { frame: "local" }, 'param "frame" is "local"; valid: world, face — '],
-    ["the old frame word", { frame: "attributes" }, 'param "frame" is "attributes"; valid: world, face — '],
+    ["an unknown frame", { frame: "local" }, 'param "frame" is "local"; valid: box, face — '],
+    ["the old frame word", { frame: "attributes" }, 'param "frame" is "attributes"; valid: box, face — '],
+    ["the frame's name before the box nodes read bounds locally, with the rename", { frame: "world" }, 'param "frame" is "world", which was renamed "box" — a cell\'s box is an extent'],
     ["two units", { units: ["absolute", "relative"] }, /param "units" is \["absolute","relative"\]; give ONE unit for all three axes or THREE/],
     ["an unknown unit", { units: ["absolute", "fraction", "absolute"] }, 'param "units" entry 1 (axis y) is "fraction"; valid: absolute, relative.'],
     ["self as a size unit", { units: ["self"] }, 'param "units" entry 0 is "self"; valid: absolute, relative.'],
@@ -639,7 +640,7 @@ describe("placeBox: refusals", () => {
     expect(missing).toContain('there is no "alongAxis" (param "alongAxisAttr", the along axis)');
     expect(missing).toContain('there is no "alongSign" (param "alongSignAttr", the along direction)');
     expect(missing).toContain('there is no "outward" (param "outwardAttr", the outward normal)');
-    expect(missing).toContain('set frame to "world"');
+    expect(missing).toContain('set frame to "box"');
     const geo = worked();
     const pts = geo.attrs.point;
     pts.add("alongAxis", "i32", 1, 0);
@@ -732,7 +733,7 @@ describe("placeBox: determinism and the serialized format", () => {
     const json = serializeGraph(build("forward"));
     const node = json.nodes.find((n) => n.id === "trim")!;
     Object.assign(node.params as Record<string, unknown>, {
-      frame: "world",
+      frame: "box",
       size: [2, 1, 2],
       units: ["absolute", "relative", "absolute"],
       anchor: [0.5, 0, 0.5],

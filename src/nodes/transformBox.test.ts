@@ -125,7 +125,7 @@ function oracle(list: Box[], s: number[][], pv: number[][], t: number[][], pivot
     const h: number[] = [];
     for (let k = 0; k < 3; k++) {
       const p =
-        pivotIn === "world" ? pv[i][k] : pivotIn === "cell" ? lo[k] + pv[i][k] * (hi[k] - lo[k]) : uLo[k] + pv[i][k] * (uHi[k] - uLo[k]);
+        pivotIn === "origin" ? pv[i][k] : pivotIn === "cell" ? lo[k] + pv[i][k] * (hi[k] - lo[k]) : uLo[k] + pv[i][k] * (uHi[k] - uLo[k]);
       const a = p + s[i][k] * (lo[k] - p) + t[i][k];
       const b = p + s[i][k] * (hi[k] - p) + t[i][k];
       // + 0: a -0 face is written +0 (dyadic() can round to -0).
@@ -221,6 +221,45 @@ describe("transformBox: by hand", () => {
     ]);
   });
 
+  it('"union" refuses chosen cells in different frames, naming two and the column; one shared frame, or the odd cell left out, cooks', async () => {
+    const geo = cells([
+      [[0, 0, 0], [2, 2, 2]],
+      [[2, 0, 0], [4, 2, 2]],
+      [[4, 0, 0], [6, 2, 2]],
+    ]);
+    const params = { scale: [2, 2, 2], pivot: [0.5, 0.5, 0.5], pivotIn: "union" };
+    const shared = { P: [8, 0, -3] as [number, number, number], rot: [0, 0, 0, 1] as [number, number, number, number], scale: [1, 1, 1] as [number, number, number] };
+    const at = (ts: (typeof shared)[]) => {
+      const g = cells(boxes(geo));
+      const pts = g.attrs.point;
+      ts.forEach((t, i) => {
+        pts.require("P").setTuple(i, t.P);
+        pts.require("rot").setTuple(i, t.rot);
+        pts.require("scale").setTuple(i, t.scale);
+      });
+      return g;
+    };
+    // One shared frame: the identity's answer, bit for bit.
+    expect(boxes(await xform(at([shared, shared, shared]), params))).toEqual(boxes(await xform(geo, params)));
+    // Each column on its own, on the THIRD cell, so the message names the first and the one that differs.
+    for (const [col, t] of [
+      ["P", { ...shared, P: [8, 0, -2] }],
+      ["rot", { ...shared, rot: [0, Math.SQRT1_2, 0, Math.SQRT1_2] }],
+      ["scale", { ...shared, scale: [1, 1, -1] }],
+    ] as const) {
+      const msg = await rejection(xform(at([shared, shared, t as typeof shared]), params));
+      expect(msg).toMatch(new RegExp(`^transformBox: pivotIn "union" takes one bounding box of every chosen cell, but cells 0 and 2 are in different frames — ${col} \\[`));
+      expect(msg).toContain('pivotIn "cell"');
+      // Left out by `where`, the odd cell is not counted, and the rest cooks.
+      await xform(at([shared, shared, t as typeof shared]), { ...params, where: f('lt(attribute("cell"), 2)') });
+    }
+    // Bit-identical means bits: +0 and -0 are two frames.
+    expect(await rejection(xform(at([shared, { ...shared, P: [8, -0, -3] }, shared]), params))).toContain("cells 0 and 1 are in different frames — P [8, 0, -3] and [8, -0, -3]");
+    // "cell" and "origin" pool nothing, so differing frames are not refused there.
+    await xform(at([shared, { ...shared, P: [1, 2, 3] }, shared]), { ...params, pivotIn: "cell" });
+    await xform(at([shared, { ...shared, P: [1, 2, 3] }, shared]), { ...params, pivotIn: "origin" });
+  });
+
   it("lattice to world, the brick house's map: x and z centred on the lot, y scaled 0.4 — byte for byte the setBounds it replaces", async () => {
     // Integer lattice boxes (studs across, plates up) with a per-cell lot.
     const rng = new Pcg32(7);
@@ -248,9 +287,9 @@ describe("transformBox: by hand", () => {
 // ---------------------------------------------------------------------------
 
 describe("transformBox: against the oracle", () => {
-  for (const pivotIn of ["world", "cell", "union"] as const) {
+  for (const pivotIn of ["origin", "cell", "union"] as const) {
     it(`pivotIn "${pivotIn}": 128 random boxes, per-cell field scale, pivot and translate, a quarter left out`, async () => {
-      const rng = new Pcg32(pivotIn.length * 31 + 5);
+      const rng = new Pcg32((pivotIn === "origin" ? "world".length : pivotIn.length) * 31 + 5);
       const list: Box[] = [];
       const s: number[][] = [];
       const pv: number[][] = [];
@@ -261,7 +300,7 @@ describe("transformBox: against the oracle", () => {
         list.push([lo, lo.map((v) => v + Math.abs(dyadic(rng, 8)))]);
         // Scales on a 1/4 grid in [-2, 2], zero and negatives included.
         s.push([0, 1, 2].map(() => Math.round((rng.nextF32() * 4 - 2) * 4) / 4));
-        pv.push([0, 1, 2].map(() => (pivotIn === "world" ? dyadic(rng, 16) : Math.round(rng.nextF32() * 8) / 8)));
+        pv.push([0, 1, 2].map(() => (pivotIn === "origin" ? dyadic(rng, 16) : Math.round(rng.nextF32() * 8) / 8)));
         t.push([dyadic(rng, 4), dyadic(rng, 4), dyadic(rng, 4)]);
         chosen.push(rng.nextF32() >= 0.25);
       }
@@ -314,7 +353,7 @@ describe("transformBox: against the oracle", () => {
 // ---------------------------------------------------------------------------
 
 describe("transformBox: nothing else changes", () => {
-  it("P, rot, scale, seeds, attributes, topology carried; a ROTATED cell transforms as an unrotated one; the input is not written", async () => {
+  it("P, rot, scale, seeds, attributes, topology carried; a ROTATED cell transforms in its own (local) box, blind to its transform; the input is not written", async () => {
     const make = (rotated: boolean): Geometry => {
       const line = createPolyline([0, 0, 0, 1, 2, 3, 4, 5, 6]);
       const pts = line.attrs.point;
@@ -378,9 +417,29 @@ describe("transformBox: nothing else changes", () => {
 describe("transformBox: refusals", () => {
   const one = (): Geometry => cells([[[0, 0, 0], [4, 4, 4]]]);
 
+  it('a graph FILE with the old word "world" is refused on load, naming the rename and the fix', () => {
+    const doc = {
+      formatVersion: 1,
+      seed: 1,
+      nodes: [
+        { id: "grid", type: "pointGrid", params: {} },
+        { id: "move", type: "transformBox", params: { pivotIn: "world" } },
+      ],
+      connections: [{ from: ["grid", "out"], to: ["move", "in"] }],
+      outputs: [{ id: "move", pin: "out", name: "out" }],
+    };
+    expect(() => deserializeGraph(doc as never)).toThrow(/node "move" param "pivotIn": "world" was renamed "origin" — a cell's box is an extent in its point's OWN frame.*; write "origin" \(expected one of "origin", "cell", "union"\)/);
+  });
+
+  it('refuses the old word "world", stating the rename to "origin"', async () => {
+    const msg = await rejection(xform(one(), { pivotIn: "world" }));
+    expect(msg).toMatch(/^transformBox: param "pivotIn" is "world", which was renamed "origin" — a cell's box is an extent in its point's OWN frame/);
+    expect(msg).toContain('Write "origin" (the default)');
+  });
+
   it("refuses an unknown pivotIn, naming the valid ones and what each means", async () => {
     expect(await rejection(xform(one(), { pivotIn: "centre" }))).toBe(
-      'transformBox: param "pivotIn" is "centre"; valid: world, cell, union — "world" reads pivot as a point, "cell" as a 0..1 fraction of each cell\'s own box ([0.5, 0.5, 0.5] is its centre), "union" as the same fraction of the bounding box of every cell transformed.',
+      'transformBox: param "pivotIn" is "centre"; valid: origin, cell, union — "origin" reads pivot as a point in the boxes\' own coordinates, "cell" as a 0..1 fraction of each cell\'s own box ([0.5, 0.5, 0.5] is its centre), "union" as the same fraction of the bounding box of every cell transformed.',
     );
   });
 
@@ -451,6 +510,10 @@ describe("transformBox: determinism and JSON", () => {
           },
           "box",
         ),
+      // The corners above are WORLD corners built from P; "union" pools
+      // corners, so the cells must share one frame. Moving every P to the
+      // origin keeps the corners' bytes and makes them that frame's.
+      origin: () => g.add(setAttribute, { name: "P", type: "f32", tupleSize: 3, value: fieldFromJson({ fn: "vec", args: [0, 0, 0] }) }, "origin"),
       move: () =>
         g.add(
           transformBox,
@@ -464,11 +527,12 @@ describe("transformBox: determinism and JSON", () => {
         ),
       tint: () => g.add(setAttribute, { name: "r", type: "f32", value: fieldFromJson({ fn: "randomField", key: "r" }) }, "tint"),
     };
-    const ids = order === "forward" ? ["grid", "box", "move", "tint"] : ["tint", "move", "box", "grid"];
+    const ids = order === "forward" ? ["grid", "box", "origin", "move", "tint"] : ["tint", "move", "origin", "box", "grid"];
     const h: Record<string, NodeHandle> = {};
     for (const id of ids) h[id] = add[id as keyof typeof add]();
     g.connect(h.grid, "out", h.box, "in");
-    g.connect(h.box, "out", h.move, "in");
+    g.connect(h.box, "out", h.origin, "in");
+    g.connect(h.origin, "out", h.move, "in");
     g.connect(h.move, "out", h.tint, "in");
     g.output(h.tint, "out", "cells");
     return g;

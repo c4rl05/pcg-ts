@@ -1,5 +1,5 @@
 /**
- * Snapping onto an absolute lattice, to f32 precision: the one rule
+ * Snapping onto a lattice, to f32 precision: the one rule
  * `splitBox` (its interior cuts), `placeBox` and `offsetBox` (the boxes
  * they write) share, so a cut and a box on the same lattice land on the
  * same lines. Internal: not re-exported from `src/nodes/index.ts`.
@@ -7,15 +7,24 @@
  * ONE VOCABULARY. `snapMode` is "round" | "floor" | "ceil" | "out" | "in"
  * wherever a BOX is snapped, decided once into a {@link BoxSnap}:
  * - "round": each face to the nearest line (a half rounds up);
- * - "floor" / "ceil": each face down / up the WORLD axis, both faces the
+ * - "floor" / "ceil": each face down / up the axis, both faces the
  *   same way, so a box a whole number of steps long keeps its size;
  * - "out": the box GROWS onto the lattice, its min face down and its max
  *   face up; "in": it SHRINKS onto it, the reverse.
- * `snapTo` is "lattice" (the faces onto the absolute lattice anchored at 0)
+ * `snapTo` is "lattice" (the faces onto the lattice anchored at 0)
  * or "size" (the box's size to a whole number of steps, its centre kept;
  * there "floor" and "in" round the size down, "ceil" and "out" up).
  * A CUT has no inside, so `splitBox` takes "round" | "floor" | "ceil" only
  * and refuses "out" and "in" by name ({@link refuseCutSnapMode}).
+ *
+ * THE LATTICE IS THE BOX'S. Bounds are an extent local to the point's
+ * transform (world = P + rot * (scale * x)), so a lattice of step s here is
+ * anchored at 0 of the box's coordinates — the cell's P — in its own units:
+ * a rotated building snaps in its own frame, and the code never reads the
+ * transform. Two cells agree on one lattice when they share a frame, which
+ * every piece of one grammar root does, or when their P lie on it with
+ * equal rot and scale. The tolerances below run at the stored (local)
+ * magnitudes.
  */
 import { canonicalOneOf } from "../diagnostics/canonical.js";
 
@@ -153,7 +162,7 @@ export function decodeBoxSnap(node: string, snapMode: unknown, snapTo: unknown):
   const mode = canonicalOneOf(BOX_SNAP_MODES, snapMode);
   if (mode === undefined) {
     throw new Error(
-      `${node}: param "snapMode" is ${JSON.stringify(snapMode)}; valid: ${BOX_SNAP_MODES.join(", ")} — "round" to the nearest line, "floor" and "ceil" down and up the world axis, "out" grows the box onto the lattice, "in" shrinks it.`,
+      `${node}: param "snapMode" is ${JSON.stringify(snapMode)}; valid: ${BOX_SNAP_MODES.join(", ")} — "round" to the nearest line, "floor" and "ceil" down and up the axis, "out" grows the box onto the lattice, "in" shrinks it.`,
     );
   }
   const to = canonicalOneOf(SNAP_TO, snapTo);
@@ -169,7 +178,7 @@ export function decodeBoxSnap(node: string, snapMode: unknown, snapTo: unknown):
 /**
  * One axis of a box `[l, h]` snapped by `rule` on a lattice of `step` (> 0),
  * written to `out[0]`, `out[1]`. Under "lattice" each face goes onto the
- * absolute lattice ({@link snapToLattice}, its own rounding code per face).
+ * lattice ({@link snapToLattice}, its own rounding code per face).
  * Under "size" the size goes to a whole number of steps — one already
  * whole to f32 precision at the box's coordinates stays — and the centre
  * stays put; a negative size (a crossed box) is left as it is.
@@ -196,7 +205,7 @@ export function snapBoxAxis(l: number, h: number, step: number, rule: BoxSnap, o
 }
 
 /**
- * The `snap` param of a box node — a lattice step per WORLD axis, 0 for
+ * The `snap` param of a box node — a lattice step per box axis, 0 for
  * none — checked once: every component a finite number >= 0, or a refusal
  * naming the component.
  */
@@ -219,5 +228,5 @@ export function requireSnapSteps(node: string, snap: readonly unknown[]): readon
  */
 export function refuseCutSnapMode(node: string, param: string, value: unknown): string | undefined {
   if (value !== "out" && value !== "in") return undefined;
-  return `${node}: param "${param}" is ${JSON.stringify(value)}, which snaps a BOX — it grows ("out") or shrinks ("in") a box onto the lattice, and placeBox and offsetBox take it — but a cut lies between two pieces and has no inside to grow or shrink. Valid here: floor, round, ceil ("floor" and "ceil" are down and up the world axis).`;
+  return `${node}: param "${param}" is ${JSON.stringify(value)}, which snaps a BOX — it grows ("out") or shrinks ("in") a box onto the lattice, and placeBox and offsetBox take it — but a cut lies between two pieces and has no inside to grow or shrink. Valid here: floor, round, ceil ("floor" and "ceil" are down and up the axis).`;
 }
