@@ -44,8 +44,6 @@ waiting for anything. Its body stays because the analysis under it is
 what the outcome tested — several of these scored badly, and a survey
 that guessed wrong is worth more to the next survey than a deleted one.
 
-- `boxesToMesh` is TEMPORARILY exempt from the corpus-coverage gates (tests/corpusNodeCoverage.test.ts, tests/graphs.test.ts); adopted by a corpus graph removes it.
-
 ### `smoothNormals`' two f32 params refuse a field — found 2026-09-27
 
 The node (8103b85) shipped after the sweep that made every per-element

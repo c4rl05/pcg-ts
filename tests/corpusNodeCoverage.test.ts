@@ -25,12 +25,6 @@ const CANNOT_APPEAR: Readonly<Record<string, string>> = {
   // graph file cannot carry one with anything in it; a host sets the items
   // in code (`pcg run --in` synthesizes it for the same reason).
   dataInput: "items never serialize",
-  // TEMPORARY, and not a "cannot": boxesToMesh landed while the corpus
-  // graphs that hand-build its tail (examples-facade, examples-floorplan,
-  // basics-split-box, basics-apply-rules) were being rewritten elsewhere,
-  // so this commit could not touch them. The test below fails the moment a
-  // graph uses it, which is when this entry goes.
-  boxesToMesh: "pending corpus adoption (the cell-to-mesh tails in facade, floorplan, split-box, apply-rules)",
 };
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));

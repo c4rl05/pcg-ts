@@ -236,9 +236,17 @@ const COUNT = 97;
 // 14 compiled — the floor that holds whatever the corpus does next — and
 // with the corpus 22 of 98. The 2026-10-24 30/170 counted the two graphs'
 // verbatim-shared split bodies twice; the frozen set is deduplicated.
+// Remeasured 2026-10-25 once more, when basics-split-box,
+// basics-apply-rules, examples-facade and examples-floorplan replaced their
+// centre/scale copyToPoints tails with boxesToMesh: those tails were
+// box-name arithmetic (box("center"), box("sx"), the corners spelled out),
+// so the corpus lost it — forward with the frozen specs 16 rewrites of 92
+// names, 16 evaluated, 16 compiled; reverse 31 expansions of 95 names, 31
+// evaluated, 30 compiled. The corpus floors sit just under that; the
+// frozen floor is unchanged.
 const FORWARD_FROZEN_COUNTS = { rewritten: 12, names: 80, evaluated: 12, compiled: 12 };
-const FORWARD_COUNTS = { rewritten: 20, names: 90, evaluated: 20, compiled: 20 };
-const REVERSE_COUNTS = { expanded: 30, names: 95, evaluated: 30, compiled: 30 };
+const FORWARD_COUNTS = { rewritten: 15, names: 91, evaluated: 15, compiled: 15 };
+const REVERSE_COUNTS = { expanded: 30, names: 94, evaluated: 30, compiled: 29 };
 
 function ctxFor(spec: FieldSpec): { ctx: EvalContext; layout: FieldKernelLayout } {
   const geo = createPointCloud(COUNT);

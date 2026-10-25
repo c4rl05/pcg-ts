@@ -306,13 +306,25 @@
             "attrs": {
               "point": [
                 "P:f32x3",
+                "density:f32",
+                "boundsMin:f32x3",
+                "boundsMax:f32x3",
+                "color:f32x4",
+                "seed:u32",
+                "piece:string",
+                "ruleDepth:i32",
+                "ruleRoll:f32",
+                "pieceIndex:i32",
+                "ruleParent:i32",
                 "uv:f32x2",
-                "rot:f32x4",
-                "scale:f32x3",
-                "seed:u32"
+                "boxSide:i32"
               ],
               "primitive": [
                 "primtype:string"
+              ],
+              "detail": [
+                "rulesCutOff:i32x6",
+                "rulesCutOffRules:stringx6"
               ]
             },
             "bounds": {
@@ -362,14 +374,14 @@
             },
             "bounds": {
               "min": [
-                -16.6613,
-                0.06,
-                -0.1
+                -12,
+                0,
+                0
               ],
               "max": [
-                16.5779,
-                15.94,
-                0.3
+                12,
+                0,
+                0
               ]
             }
           }
@@ -4895,10 +4907,18 @@
             "attrs": {
               "point": [
                 "P:f32x3",
+                "density:f32",
+                "boundsMin:f32x3",
+                "boundsMax:f32x3",
+                "color:f32x4",
+                "seed:u32",
+                "piece:string",
+                "level:i32",
+                "bay:i32",
+                "door:f32",
+                "pieceIndex:i32",
                 "uv:f32x2",
-                "rot:f32x4",
-                "scale:f32x3",
-                "seed:u32"
+                "boxSide:i32"
               ],
               "primitive": [
                 "primtype:string"
@@ -4947,13 +4967,13 @@
             },
             "bounds": {
               "min": [
-                -11.6875,
-                0.5,
+                -8,
+                0,
                 0
               ],
               "max": [
-                11.6875,
-                13.25,
+                8,
+                0,
                 0
               ]
             }
@@ -6924,13 +6944,25 @@
             "attrs": {
               "point": [
                 "P:f32x3",
+                "density:f32",
+                "boundsMin:f32x3",
+                "boundsMax:f32x3",
+                "color:f32x4",
+                "seed:u32",
+                "piece:string",
+                "ruleDepth:i32",
+                "ruleRoll:f32",
+                "pieceIndex:i32",
+                "ruleParent:i32",
                 "uv:f32x2",
-                "rot:f32x4",
-                "scale:f32x3",
-                "seed:u32"
+                "boxSide:i32"
               ],
               "primitive": [
                 "primtype:string"
+              ],
+              "detail": [
+                "rulesCutOff:i32",
+                "rulesCutOffRules:string"
               ]
             },
             "bounds": {
@@ -6964,19 +6996,20 @@
             "attrs": {
               "point": [
                 "P:f32x3",
-                "uv:f32x2",
-                "rot:f32x4",
-                "scale:f32x3",
-                "seed:u32",
                 "density:f32",
                 "boundsMin:f32x3",
                 "boundsMax:f32x3",
                 "color:f32x4",
+                "seed:u32",
                 "kind:string",
                 "ruleDepth:i32",
                 "ruleRoll:f32",
                 "pieceIndex:i32",
                 "ruleParent:i32",
+                "uv:f32x2",
+                "boxSide:i32",
+                "rot:f32x4",
+                "scale:f32x3",
                 "degree:u32"
               ],
               "primitive": [

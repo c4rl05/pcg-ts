@@ -1,8 +1,11 @@
 /**
  * boxesToMesh as a drop-in for the hand-built cell-to-mesh tail, measured on
- * a corpus graph IN MEMORY (the corpus file is not edited here).
+ * a graph IN MEMORY. The graph is tests/support/splitBoxCopyTail.json:
+ * graphs/basics-split-box.json as it stood before the corpus adopted
+ * boxesToMesh (frozen from fb047adb, byte for byte), so the comparison
+ * keeps the tail it replaced to compare against.
  *
- * graphs/basics-split-box.json ends in the four-node tail: `centre`
+ * That graph ends in the four-node tail: `centre`
  * (P = box("center")), `size` (scale = the box less 0.08, z cut to 0.2 on
  * openings), a unit meshPrimitive box `unitBox`, and `panels`, a
  * copyToPoints topology "keep" of the unit box onto the cells. `centre` and
@@ -31,7 +34,7 @@ import { cook, deserializeGraph } from "../src/index.js";
 import type { Geometry } from "../src/data/index.js";
 import type { DataCollection } from "../src/graph/index.js";
 
-const FILE = fileURLToPath(new URL("../graphs/basics-split-box.json", import.meta.url));
+const FILE = fileURLToPath(new URL("./support/splitBoxCopyTail.json", import.meta.url));
 
 type Json = Record<string, unknown>;
 interface G {
@@ -174,7 +177,7 @@ describe("the unshrunk tail (scale = box(\"size\")) against boxesToMesh on the c
   }, 60_000);
 });
 
-describe("boxesToMesh drops in for basics-split-box's copyToPoints tail", () => {
+describe("boxesToMesh drops in for basics-split-box's former copyToPoints tail", () => {
   it("same topology on 20 seeds; every new vertex on its stored box; the tail within one ulp of it; uv the face frame", async () => {
     const rows: string[] = [];
     let totalDiffer = 0;

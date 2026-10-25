@@ -3,7 +3,7 @@
   "seed": 11,
   "meta": {
     "title": "Rewrite boxes by rule",
-    "description": "`applyRules` runs a REWRITING GRAMMAR over labelled boxes, one round at a time: the recursion of a split grammar, in a graph that cannot wire a cycle. Three facades stand in a row, each a cell labelled \"facade\" with its own width and its own number of 3.2-high floors. A RULE IS A PIN PAIR in the node's one inline body: an exposed input and an exposed output with the SAME name, which is the label it rewrites. Each round the wrapper sorts the cells by their `piece` label, feeds every rule the cells carrying its name, cooks only those rules' branches, and the products, whatever they are now labelled, are the next round. A label with no rule — leaf, frame, glass, pane, mullion — is TERMINAL: its cells leave on `out`. `facade` cuts a facade into floors and `floor` cuts a floor into bays of about 4.5, both with splitBox \"repeat\". `panel` IS THE RECURSION: its products are labelled `panel` again. A panel whose longer side is under 1.7 STOPS by relabelling itself — setAttribute string, values [\"panel\", \"leaf\", \"window\"], the index a select on that size test — becoming a window when its roll is under 0.6 and a plain leaf otherwise; every other panel is halved along its longer side (splitBox axis \"perCell\", axisIndex picking x or y), at a ratio between 35:65 and 65:35 read off the same roll, and both halves go round again. So the depth tracks the size: nothing counts the splits, and a large bay simply takes more rounds to get small. THE ROLL is `ruleRoll`, a number in [0, 1) the wrapper writes on every cell it feeds, hashed from the node seed, the rule and a SCOPE: by default the cell itself, so every panel cuts at its own ratio. `window` is scoped to `facade` (`scoped` [\"window\"], `scopeOf` [\"facade\"]), so every window rolls the number of the facade it descends from, and its one relabel — values [\"recessed\", \"oriel\"] — gives a whole facade ONE window style: glass set back in a frame, or a pair of panes standing proud on either side of a mullion, each cut by two more splitBox rules. Every relabel costs a round, and `ruleDepth` records the round each cell settled in: this grammar runs about ten, well inside `maxDepth` 32; had a rule never stopped, `converged` would read 0 and the detail attribute `rulesCutOff` on `out` would name it, one count per rule. The last nodes only draw: a unit box per piece at its box's centre and size, leaves a little smaller so the cuts show, glass set back, panes and mullions standing proud, each leaf tinted by the roll that made it.",
+    "description": "`applyRules` runs a REWRITING GRAMMAR over labelled boxes, one round at a time: the recursion of a split grammar, in a graph that cannot wire a cycle. Three facades stand in a row, each a cell labelled \"facade\" with its own width and its own number of 3.2-high floors. A RULE IS A PIN PAIR in the node's one inline body: an exposed input and an exposed output with the SAME name, which is the label it rewrites. Each round the wrapper sorts the cells by their `piece` label, feeds every rule the cells carrying its name, cooks only those rules' branches, and the products, whatever they are now labelled, are the next round. A label with no rule — leaf, frame, glass, pane, mullion — is TERMINAL: its cells leave on `out`. `facade` cuts a facade into floors and `floor` cuts a floor into bays of about 4.5, both with splitBox \"repeat\". `panel` IS THE RECURSION: its products are labelled `panel` again. A panel whose longer side is under 1.7 STOPS by relabelling itself — setAttribute string, values [\"panel\", \"leaf\", \"window\"], the index a select on that size test — becoming a window when its roll is under 0.6 and a plain leaf otherwise; every other panel is halved along its longer side (splitBox axis \"perCell\", axisIndex picking x or y), at a ratio between 35:65 and 65:35 read off the same roll, and both halves go round again. So the depth tracks the size: nothing counts the splits, and a large bay simply takes more rounds to get small. THE ROLL is `ruleRoll`, a number in [0, 1) the wrapper writes on every cell it feeds, hashed from the node seed, the rule and a SCOPE: by default the cell itself, so every panel cuts at its own ratio. `window` is scoped to `facade` (`scoped` [\"window\"], `scopeOf` [\"facade\"]), so every window rolls the number of the facade it descends from, and its one relabel — values [\"recessed\", \"oriel\"] — gives a whole facade ONE window style: glass set back in a frame, or a pair of panes standing proud on either side of a mullion, each cut by two more splitBox rules. Every relabel costs a round, and `ruleDepth` records the round each cell settled in: this grammar runs about ten, well inside `maxDepth` 32; had a rule never stopped, `converged` would read 0 and the detail attribute `rulesCutOff` on `out` would name it, one count per rule. The last nodes only draw: `tint` colours each piece, every leaf by the roll that made it; `depth` is a transformBox that scales each piece's depth about its own centre and moves it on z, so glass is set back and panes and mullions stand proud; `inset` is an offsetBox that moves a leaf's four side faces in by 0.03 so the cuts show; and `boxesToMesh` builds every box as faces where it stands.",
     "tags": [
       "basics",
       "split",
@@ -549,136 +549,6 @@
       }
     },
     {
-      "id": "centre",
-      "type": "setAttribute",
-      "params": {
-        "name": "P",
-        "domain": "point",
-        "type": "f32",
-        "tupleSize": 3,
-        "value": {
-          "fn": "add",
-          "args": [
-            {
-              "fn": "box",
-              "name": "center"
-            },
-            {
-              "fn": "vec",
-              "args": [
-                0,
-                0,
-                {
-                  "fn": "byAttribute",
-                  "name": "piece",
-                  "cases": {
-                    "glass": -0.1,
-                    "pane": 0.3,
-                    "mullion": 0.3
-                  },
-                  "default": 0
-                }
-              ]
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "size",
-      "type": "setAttribute",
-      "params": {
-        "name": "scale",
-        "domain": "point",
-        "type": "f32",
-        "tupleSize": 3,
-        "value": {
-          "fn": "vec",
-          "args": [
-            {
-              "fn": "select",
-              "args": [
-                {
-                  "fn": "attributeIs",
-                  "name": "piece",
-                  "value": "leaf"
-                },
-                {
-                  "fn": "max",
-                  "args": [
-                    {
-                      "fn": "sub",
-                      "args": [
-                        {
-                          "fn": "box",
-                          "name": "sx"
-                        },
-                        0.06
-                      ]
-                    },
-                    0.01
-                  ]
-                },
-                {
-                  "fn": "box",
-                  "name": "sx"
-                }
-              ]
-            },
-            {
-              "fn": "select",
-              "args": [
-                {
-                  "fn": "attributeIs",
-                  "name": "piece",
-                  "value": "leaf"
-                },
-                {
-                  "fn": "max",
-                  "args": [
-                    {
-                      "fn": "sub",
-                      "args": [
-                        {
-                          "fn": "box",
-                          "name": "sy"
-                        },
-                        0.06
-                      ]
-                    },
-                    0.01
-                  ]
-                },
-                {
-                  "fn": "box",
-                  "name": "sy"
-                }
-              ]
-            },
-            {
-              "fn": "mul",
-              "args": [
-                {
-                  "fn": "box",
-                  "name": "sz"
-                },
-                {
-                  "fn": "byAttribute",
-                  "name": "piece",
-                  "cases": {
-                    "glass": 0.3,
-                    "pane": 2,
-                    "mullion": 2.4
-                  },
-                  "default": 1
-                }
-              ]
-            }
-          ]
-        }
-      }
-    },
-    {
       "id": "tint",
       "type": "setAttribute",
       "params": {
@@ -799,23 +669,71 @@
       }
     },
     {
-      "id": "unitBox",
-      "type": "meshPrimitive",
+      "id": "depth",
+      "type": "transformBox",
       "params": {
-        "shape": "box",
-        "size": [
-          1,
-          1,
-          1
-        ]
+        "scale": {
+          "fn": "vec",
+          "args": [
+            1,
+            1,
+            {
+              "fn": "byAttribute",
+              "name": "piece",
+              "cases": {
+                "glass": 0.3,
+                "pane": 2,
+                "mullion": 2.4
+              },
+              "default": 1
+            }
+          ]
+        },
+        "pivotIn": "cell",
+        "pivot": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "translate": {
+          "fn": "vec",
+          "args": [
+            0,
+            0,
+            {
+              "fn": "byAttribute",
+              "name": "piece",
+              "cases": {
+                "glass": -0.1,
+                "pane": 0.3,
+                "mullion": 0.3
+              },
+              "default": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "inset",
+      "type": "offsetBox",
+      "params": {
+        "margin": [
+          -0.03,
+          -0.03,
+          0
+        ],
+        "where": {
+          "fn": "attributeIs",
+          "name": "piece",
+          "value": "leaf"
+        }
       }
     },
     {
       "id": "panels",
-      "type": "copyToPoints",
-      "params": {
-        "topology": "keep"
-      }
+      "type": "boxesToMesh",
+      "params": {}
     }
   ],
   "connections": [
@@ -855,38 +773,8 @@
         "out"
       ],
       "to": [
-        "centre",
-        "in"
-      ]
-    },
-    {
-      "from": [
-        "centre",
-        "out"
-      ],
-      "to": [
-        "size",
-        "in"
-      ]
-    },
-    {
-      "from": [
-        "size",
-        "out"
-      ],
-      "to": [
         "tint",
         "in"
-      ]
-    },
-    {
-      "from": [
-        "unitBox",
-        "out"
-      ],
-      "to": [
-        "panels",
-        "source"
       ]
     },
     {
@@ -895,8 +783,28 @@
         "out"
       ],
       "to": [
+        "depth",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "depth",
+        "out"
+      ],
+      "to": [
+        "inset",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "inset",
+        "out"
+      ],
+      "to": [
         "panels",
-        "target"
+        "in"
       ]
     }
   ],

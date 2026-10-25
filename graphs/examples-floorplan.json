@@ -307,74 +307,25 @@
     },
     {
       "id": "slab",
-      "type": "setAttribute",
+      "type": "transformBox",
       "params": {
-        "name": "scale",
-        "domain": "point",
-        "type": "f32",
-        "tupleSize": 3,
-        "value": {
-          "fn": "mul",
-          "args": [
-            0.9,
-            {
-              "fn": "sub",
-              "args": [
-                {
-                  "fn": "attribute",
-                  "name": "boundsMax",
-                  "tupleSize": 3
-                },
-                {
-                  "fn": "attribute",
-                  "name": "boundsMin",
-                  "tupleSize": 3
-                }
-              ]
-            }
-          ]
-        },
-        "select": 0,
-        "values": [],
-        "weights": [],
-        "stringValue": "",
-        "seed": 0
-      }
-    },
-    {
-      "id": "unitBox",
-      "type": "meshPrimitive",
-      "params": {
-        "shape": "box",
-        "size": [
-          1,
-          1,
-          1
+        "scale": [
+          0.9,
+          0.9,
+          0.9
         ],
-        "center": [
-          0,
-          0,
-          0
-        ],
-        "orientation": "xz",
-        "subdivisions": [
-          1,
-          1,
-          1
-        ],
-        "flip": false
+        "pivotIn": "cell",
+        "pivot": [
+          0.5,
+          0.5,
+          0.5
+        ]
       }
     },
     {
       "id": "rooms",
-      "type": "copyToPoints",
-      "params": {
-        "targetNames": [],
-        "targetIndexAttr": "",
-        "sourceGroupAttr": "",
-        "targetGroupAttr": "",
-        "topology": "keep"
-      }
+      "type": "boxesToMesh",
+      "params": {}
     },
     {
       "id": "lift",
@@ -456,7 +407,7 @@
     },
     {
       "from": [
-        "centre",
+        "split",
         "out"
       ],
       "to": [
@@ -466,22 +417,12 @@
     },
     {
       "from": [
-        "unitBox",
-        "out"
-      ],
-      "to": [
-        "rooms",
-        "source"
-      ]
-    },
-    {
-      "from": [
         "slab",
         "out"
       ],
       "to": [
         "rooms",
-        "target"
+        "in"
       ]
     },
     {
