@@ -463,6 +463,18 @@ describe("offsetBox: collapse (fit)", () => {
     expect(lo[0] >= 5e5 && lo[0] <= 5e5 + ulp).toBe(true);
   });
 
+  it("insets that meet in decimals meet: half an f32 ulp of each inward move is allowed, as shellSplit allows its thicknesses", async () => {
+    // [-1084.5, 10] inset 1084.8 and 9.7 meets at 0.3. In f32 the faces
+    // cross by 4.9e-5: past two ulps at 0.3 (6e-8), within half an ulp of
+    // 1084.8 (6.1e-5) plus half of 9.7 (4.8e-7).
+    const [lo, hi] = boxes(await offset(cells([[[-1084.5, 0, 0], [10, 1, 1]]]), { marginMin: [-1084.8, 0, 0], marginMax: [-9.7, 0, 0] }))[0];
+    expect(lo[0]).toBe(hi[0]);
+    expect(Math.abs(lo[0] - 0.3)).toBeLessThan(1e-4);
+    // Ten times that crossing is still a collapse.
+    const msg = await rejection(offset(cells([[[-1084.5, 0, 0], [10, 1, 1]]]), { marginMin: [-1084.8005, 0, 0], marginMax: [-9.7, 0, 0] }));
+    expect(msg).toContain("COLLAPSES along x");
+  });
+
   it("an offset that overflows f32 bounds is refused, and a -0 face is written +0", async () => {
     expect(await rejection(offset(cells([[[0, 0, 0], [1, 1, 1]]]), { marginMax: [1e39, 0, 0] }))).toContain("offset past what f32 bounds hold");
     expect(await rejection(offset(cells([[[0, 0, 0], [1, 1, 1]]]), { margin: [-1e160, 0, 0], fit: "scale" }))).toContain(

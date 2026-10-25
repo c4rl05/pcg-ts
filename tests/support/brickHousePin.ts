@@ -30,7 +30,7 @@ export const HOUSE_PROBES = ["lotBox", "gKind", "chimShadow", "facade", "pieces"
 type Json = Record<string, unknown>;
 interface HouseGraph {
   seed: number;
-  params: { default: unknown; min?: number; max?: number }[];
+  params: { value: unknown; min?: number; max?: number }[];
   outputs: Json[];
 }
 
@@ -52,11 +52,11 @@ export function houseConfigs(house: HouseGraph, seeds: number, draws: number): H
     g.seed = c < seeds ? c + 1 : 1 + Math.floor(rnd() * 1e6);
     if (c >= seeds) {
       for (const p of g.params) {
-        if (typeof p.default !== "number" || p.min === undefined || p.max === undefined) continue;
+        if (typeof p.value !== "number" || p.min === undefined || p.max === undefined) continue;
         const r = rnd();
         let v = r < 0.15 ? p.min : r < 0.3 ? p.max : p.min + rnd() * (p.max - p.min);
         if (r >= 0.3 && rnd() < 0.7) v = Math.round(v);
-        p.default = v;
+        p.value = v;
       }
     }
     for (const id of HOUSE_PROBES) g.outputs.push({ id, pin: "out", name: `probe:${id}` });

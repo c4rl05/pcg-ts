@@ -2569,10 +2569,10 @@ export interface OffsetBoxParams {
    * and cuts a box larger than its limit to the limit; "clip" cuts away what passes the
    * limit and keeps the rest, nothing moved or rescaled. This node takes "error", "scale",
    * "allow". On an unsnapped axis, faces crossing by no more than two f32 ulps at their
-   * coordinates MEET under "error" and "scale", on one stored number. An input box that is
-   * already inside out or not finite, and an offset that takes a face past what f32 bounds
-   * hold, are refused under "error" and "scale", and written as computed under "allow".
-   * Decided once per cook.
+   * coordinates plus half an f32 ulp of each inward move MEET under "error" and "scale", on
+   * one stored number. An input box that is already inside out or not finite, and an offset
+   * that takes a face past what f32 bounds hold, are refused under "error" and "scale", and
+   * written as computed under "allow". Decided once per cook.
    *
    * - Enum: `"error"` | `"scale"` | `"allow"`
    *
