@@ -19,7 +19,7 @@ import {
   launch,
   parseTranscript,
   shellClauses,
-  stripRedirects,
+  clauseRedirects,
 } from "./agents/claude-code.mjs";
 
 const HERE = new URL(".", import.meta.url);
@@ -392,7 +392,7 @@ test("a JS arrow is not a shell redirect, so a regex literal is not a path", () 
   assert.deepEqual(bash(`node -e "if (a >= b) console.log(1)"`), [], ">= is a comparison");
 
   // ...and every real redirect still redirects.
-  const red = (c) => stripRedirects(c);
+  const red = (c) => clauseRedirects(shellClauses(c)[0]);
   assert.deepEqual(red("echo x > out.txt").targets, ["out.txt"]);
   assert.deepEqual(red("npx pcg cook g.json --json > cook.json").targets, ["cook.json"]);
   assert.deepEqual(red("a >> log.txt").appends, ["log.txt"]);
@@ -815,6 +815,127 @@ test("review round 5: normal work stays clean; the remaining plausible escapes a
   assert.equal(bash("node -e \"process.chdir('../..'); console.log(require('fs').readdirSync('.'))\"").length, 1);
   assert.equal(bash("bash -c 'cd ../.. && cat pcg-eval-Other/project/graph.json'").length > 0, true);
   assert.equal(bash("eval 'cd ../..'; cat pcg-eval-Other/project/graph.json").length > 0, true);
+});
+
+// The four helpers below each parsed quotes their own way before `shellClauses`
+// emitted words. Every test runs its NEGATIVE CONTROLS first (they flag both
+// before and after), then the assertion the old parsing got wrong.
+const WORDS_ROOT = process.platform === "win32" ? "C:\\pcg-eval\\sandboxes" : "/var/tmp/pcg-eval/sandboxes";
+const WORDS_CWD = join(WORDS_ROOT, "pcg-eval-W0rdsX", "project");
+const wordsParse = (...commands) => parseTranscript(syntheticTranscript(WORDS_CWD, "sid", commands.map((command) => ({ name: "Bash", input: { command } }))), { cwd: WORDS_CWD, tmpEntriesAtStart: null, benignRoots: jailOf(WORDS_CWD) });
+const wordsRun = (...commands) => wordsParse(...commands).readPaths.contaminating;
+const WORDS_FS_ROOT = process.platform === "win32" ? "msys:/" : "/";
+const WORDS_TMP = process.platform === "win32" ? tmpdir() : "/tmp";
+
+test("WORDS: an output flag's value is the shell's word, quotes and spaces included", () => {
+  const made = join(WORDS_TMP, "my file.png");
+  // Controls: an unquoted outside --out is recorded as an outside write, and a
+  // read of an outside file the run did NOT make still flags.
+  assert.ok(wordsParse("npx pcg render graph.json --out=/tmp/x.png").outsideWrites.includes(join(WORDS_TMP, "x.png")));
+  assert.ok(wordsRun('npx pcg render graph.json --out="/tmp/my file.png"', 'cat "/tmp/other file.png"').includes(join(WORDS_TMP, "other file.png")));
+  // The bug: a regex split `--out="/tmp/my file.png"` into `--out="/tmp/my`
+  // and `file.png"`, so the write landed nowhere and reading it back read as
+  // a reach into Temp.
+  const p = wordsParse('npx pcg render graph.json --out="/tmp/my file.png"', 'cat "/tmp/my file.png"');
+  assert.ok(p.outsideWrites.includes(made), JSON.stringify(p.outsideWrites));
+  assert.deepEqual(p.readPaths.contaminating, [], "reading back its own output");
+  assert.deepEqual(wordsParse('npx pcg render graph.json --out="my file.png"').writes, ["my file.png"]);
+  assert.deepEqual(wordsParse("npx pcg render graph.json --out 'a'\"b\".png").writes, ["ab.png"], "one word from two quotings");
+  // A command that only prints its arguments creates nothing, so it cannot launder a later read.
+  assert.deepEqual(wordsRun('echo --out="/tmp/my file.png"', 'cat "/tmp/my file.png"'), [made]);
+  assert.deepEqual(wordsRun("echo --out=/tmp/x.png", "cat /tmp/x.png"), [join(WORDS_TMP, "x.png")]);
+});
+
+test("WORDS: a > inside quoted code is the code's, not a redirect", () => {
+  // Controls: real redirects around quoted code are still redirects, and code
+  // reading an outside file still flags.
+  const red = (c) => clauseRedirects(shellClauses(c)[0]);
+  assert.deepEqual(red('node -e "a; b" > out.txt 2>&1').targets, ["out.txt"]);
+  assert.deepEqual(red("echo x 2>err.log >>log.txt").targets, ["err.log"]);
+  assert.deepEqual(red("echo x 2>err.log >>log.txt").appends, ["log.txt"]);
+  assert.deepEqual(red("x &>both.log").targets, ["both.log"]);
+  assert.ok(wordsParse('node -e "console.log(a > b)" > out.txt').writes.includes("out.txt"));
+  assert.ok(wordsRun("node -e \"require('fs').readFileSync('/etc/passwd')\"").length > 0);
+  assert.ok(wordsParse('node -e "console.log(1)" > /tmp/scratch.txt').outsideWrites.includes(join(WORDS_TMP, "scratch.txt")));
+  // The bug: the redirect finder ran over the raw clause, so `> b)"` was a
+  // write, and `1>require(...)...` cut the IO call out of the code judgeCode saw.
+  assert.deepEqual(red('node -e "a > b" > out.txt 2>&1').targets, ["out.txt"]);
+  assert.deepEqual(wordsParse('node -e "console.log(a > b)"').writes, [], "no file named `b)` was written");
+  assert.deepEqual(wordsRun("node -e \"console.log(1>require('fs').readdirSync('/').length)\""), [WORDS_FS_ROOT], "the code lists the root");
+});
+
+test("WORDS: inline code is the word after the flag, every quoting joined", () => {
+  // Controls: one quoting, either kind, still reads what it names.
+  assert.deepEqual(wordsRun(`node -e 'require("fs").readdirSync("/")'`), [WORDS_FS_ROOT]);
+  assert.ok(wordsRun("node -e \"require('fs').readFileSync('/etc/passwd')\"").length > 0);
+  assert.deepEqual(wordsRun("python3 -c \"import os; print(os.listdir('/'))\""), [WORDS_FS_ROOT]);
+  // The bug: `-e 'a'"b"` was read as `a`. bash hands node `ab`, so the
+  // literal '/' below (quoted apart from the rest) is the code's argument.
+  assert.deepEqual(wordsRun(`node -e 'require("fs").readdirSync('"'/'"')'`), [WORDS_FS_ROOT]);
+  assert.deepEqual(wordsRun(`python3 -c 'import os; print(os.listdir('"'/'"'))'`), [WORDS_FS_ROOT]);
+});
+
+test("WORDS: bash -c and eval are lifted from the command position, past wrappers, never from inside a string", () => {
+  const npmrc = join(homedir(), ".npmrc");
+  // Controls: a shell handed a program, directly or through a wrapper, runs it.
+  for (const cmd of ['sudo bash -c "cat /etc/passwd"', "xargs sh -c 'cat /etc/passwd'"]) assert.ok(wordsRun(cmd).length > 0, cmd);
+  for (const cmd of [
+    "bash -c 'ls /'",
+    "sudo bash -c 'ls /'",
+    "sudo -u root -E bash -lc 'ls /'",
+    "xargs -I{} sh -c 'ls /'",
+    "xargs -0 -n 1 sh -c 'ls /'",
+    "env FOO=1 nohup nice -n 5 timeout 10 bash -lc 'ls /'",
+    "FOO=1 /usr/bin/bash --norc -c 'ls /'",
+    "find . -name x -exec sh -c 'ls /' \\;",
+    "ssh localhost bash -c 'ls /'",
+    `bash -c "bash -c 'ls /'"`,
+    "echo x | bash -c 'ls /'",
+  ]) {
+    assert.deepEqual(wordsRun(cmd), [WORDS_FS_ROOT], cmd);
+  }
+  assert.deepEqual(wordsRun("sudo bash -c 'cd ~ && cat .npmrc'"), [npmrc]);
+  assert.deepEqual(wordsRun("eval 'cd ~'; cat .npmrc"), [npmrc], "eval moves THIS shell");
+  assert.deepEqual(wordsRun("echo 'true; cd ~; cat .npmrc' | sh"), [npmrc], "a quoted program piped into a shell");
+  // The bug: the lift was a regex over the whole line, so a `bash -c` inside a
+  // quoted string was run. It is text there.
+  assert.deepEqual(wordsRun(`echo "bash -c 'ls /'"`), []);
+  assert.deepEqual(wordsRun(`printf "%s\\n" "bash -c 'ls /'"`), []);
+  // Read from words, the lift also sees what the line regex could not: an
+  // option with an argument before `-c`, an unquoted program, and `eval`'s
+  // words when they are not one quoted string.
+  assert.deepEqual(wordsRun("time command bash -o pipefail -c 'ls /'"), [WORDS_FS_ROOT]);
+  assert.deepEqual(wordsRun("sudo sh -c ls\\ /"), [WORDS_FS_ROOT]);
+  assert.deepEqual(wordsRun("eval cd ~; cat .npmrc"), [npmrc]);
+});
+
+test("WORDS review: what a shell is handed through a here-string, a glued quote, eval --, a quoted wrapper or a pipe is still run", () => {
+  const npmrc = join(homedir(), ".npmrc");
+  const other = join(WORDS_ROOT, "pcg-eval-Other", "project", "graph.json");
+  // Each of these lost its flag in the first cut of the word-based lift (an independent review's repros).
+  // A here-string fed to a shell is its program.
+  assert.deepEqual(wordsRun("bash <<< 'cd ~ && cat .npmrc'"), [npmrc]);
+  assert.ok(wordsRun('sudo bash <<< "cd ../..; cat pcg-eval-Other/project/graph.json"').includes(other));
+  assert.ok(wordsRun("sh -s <<< $'cd ~\\ncat .npmrc'").includes(npmrc));
+  // A quoted program glued to other text in one word: the quoted PIECE is the program.
+  assert.deepEqual(wordsRun("x='cd ~ && cat .npmrc'; eval \"$x\""), [npmrc]);
+  assert.deepEqual(wordsRun("nodemon --exec='cd ~ && cat .npmrc'"), [npmrc]);
+  assert.deepEqual(wordsRun('foo --cmd="cd ~; cat .npmrc"'), [npmrc]);
+  // `eval --` ends eval's options.
+  assert.deepEqual(wordsRun("eval -- 'cd ~ && cat .npmrc'"), [npmrc]);
+  assert.ok(wordsRun('builtin eval -- "cd ../..; cat pcg-eval-Other/project/graph.json"').includes(other));
+  // A `bash -c` quoted for a command that runs it, or piped into a shell.
+  for (const cmd of [`su -c "bash -c 'ls /'"`, `watch "bash -c 'ls /'"`, `ssh localhost "bash -c 'ls /'"`, `echo "bash -c 'ls /'" | bash`, `git -c alias.x="!bash -c 'ls /'" x`, `awk 'BEGIN{system("bash -c \\"ls /\\"")}'`]) {
+    assert.deepEqual(wordsRun(cmd), [WORDS_FS_ROOT], cmd);
+  }
+  assert.deepEqual(wordsRun("echo ls / | sh"), [WORDS_FS_ROOT], "what echo prints into a shell is its program");
+  // Unquoted, `cd C:\Users` reaches Git Bash as `C:Users`, which it takes from the drive's root.
+  if (process.platform === "win32") assert.deepEqual(wordsRun("cd C:\\Users; cat c4rl05/.npmrc"), ["C:\\Users\\c4rl05\\.npmrc"]);
+  // A thousand nested evals neither overflow the stack nor go quadratic.
+  const t0 = Date.now();
+  assert.ok(Array.isArray(wordsRun("eval ".repeat(1000) + "'cd ~'; cat .npmrc")));
+  assert.ok(Array.isArray(wordsRun("x" + " > /tmp/a".repeat(40000))));
+  assert.ok(Date.now() - t0 < 5000, `took ${Date.now() - t0} ms`);
 });
 
 test("OBSERVED 2.1.272 transcript parses into turns, tools, usage and reads", () => {

@@ -392,27 +392,53 @@ function pathLike(token) {
   return /[\\/]/.test(t) || /^\.[\w.-]/.test(t) || /^[\w@+-][\w.@+-]*\.[A-Za-z][A-Za-z0-9]{0,7}$/.test(t);
 }
 
-/** The first splitter: every separator character, quoted or not. Kept as the fallback for a line that does not parse. */
+/** Whitespace-separated words, quote characters dropped: the last resort for a clause even the tolerant lexer cannot read. */
+function looseWords(text) {
+  return [...String(text).matchAll(/\S+/g)].map((m) => ({ text: m[0].replace(/["']/g, ""), quoted: /["']/.test(m[0]), pieces: /["']/.test(m[0]) ? [m[0].replace(/["']/g, "")] : [], start: m.index, end: m.index + m[0].length }));
+}
+
+/**
+ * The first splitter: every separator character, quoted or not. Kept as the
+ * fallback for a line that does not parse. Each piece is then lexed
+ * TOLERANTLY (an unterminated quote runs to the end of the piece), so a
+ * malformed line still has words and redirects.
+ */
 function naiveClauses(command) {
   const parts = String(command).split(/(&&|\|\||[;|\n])/);
   const out = [];
-  for (let i = 0; i < parts.length; i += 2) if (parts[i].trim()) out.push({ text: parts[i].trim(), piped: parts[i + 1] === "|", subs: [], quoted: [] });
+  for (let i = 0; i < parts.length; i += 2) {
+    const text = parts[i].trim();
+    if (!text) continue;
+    let lexed = null;
+    try {
+      lexed = lex(text, true)?.[0] ?? null;
+    } catch {
+      // Nested past the stack: plain words.
+    }
+    out.push(lexed ? { ...lexed, piped: parts[i + 1] === "|" } : { text, piped: parts[i + 1] === "|", subs: [], words: looseWords(text), redirects: [] });
+  }
   return out;
 }
 
 /**
  * A command line split into the clauses the SHELL would run: at `;`, `&&`,
  * `||`, `|` and newlines, but not inside single quotes, double quotes, `$'...'`,
- * `$(...)` or backticks, and not at a backslash-escaped character. Heredoc
- * bodies are already lifted out by `splitHeredocs`; comments are dropped,
- * because a quote in one (`# don't`) would otherwise open a string that runs
- * to the end of the line.
+ * `$(...)`, `<(...)`/`>(...)` or backticks, and not at a backslash-escaped
+ * character. Heredoc bodies are already lifted out by `splitHeredocs`;
+ * comments are dropped, because a quote in one (`# don't`) would otherwise
+ * open a string that runs to the end of the line.
  *
- * Each clause carries `piped` (its stdout feeds the next clause: `|`, not
- * `||`) and `subs`, the bodies of the command substitutions it contains,
- * double-quoted ones included, since the shell runs those before the clause,
- * and `quoted`, the contents of its top-level quoted strings (a quoted
- * program a command hands to a shell is judged from those).
+ * Each clause carries:
+ * - `text`: the clause as written (comments and backslash-newlines removed);
+ * - `piped`: its stdout feeds the next clause (`|`, not `||`);
+ * - `subs`: the bodies of the command and process substitutions it contains,
+ *   double-quoted ones included, since the shell runs those before the clause;
+ * - `words`: its words as the shell passes them on, quotes removed
+ *   (`'a'"b"` is `ab`, `--out="my file.png"` one word), each with `quoted`
+ *   (any part of it was quoted or escaped) and its `start`/`end` in `text`;
+ * - `redirects`: `{ op, fd, target, quoted, start, end }` for every
+ *   redirection outside quotes (`>`, `>>`, `>|`, `&>`, `&>>`, `>&`, `<`, `<>`,
+ *   `<&`, `<<`, `<<-`, `<<<`). A redirect's target is not a word.
  *
  * The first splitter cut at every separator character, quoted or not, so a
  * multi-line `node -e "..."` became one "command" per line of JavaScript:
@@ -434,6 +460,31 @@ export function shellClauses(command) {
 }
 
 function parseClauses(s) {
+  return lex(s, false) ?? naiveClauses(s);
+}
+
+const ANSI_ESCAPES = { a: "\x07", b: "\b", e: "\x1b", E: "\x1b", f: "\f", n: "\n", r: "\r", t: "\t", v: "\v", "\\": "\\", "'": "'", '"': '"', "?": "?" };
+/** The value of a `$'...'` body: bash's ANSI-C escapes. */
+function ansiDecode(t) {
+  return t.replace(/\\(?:x([0-9A-Fa-f]{1,2})|u([0-9A-Fa-f]{1,4})|U([0-9A-Fa-f]{1,8})|([0-7]{1,3})|c(.)|([\s\S]))/g, (m, x, u, U, o, cc, ch) => {
+    if (x) return String.fromCharCode(parseInt(x, 16));
+    if (u || U) {
+      const cp = parseInt(u ?? U, 16);
+      return cp <= 0x10ffff ? String.fromCodePoint(cp) : m;
+    }
+    if (o) return String.fromCharCode(parseInt(o, 8) & 0xff);
+    if (cc) return String.fromCharCode(cc.charCodeAt(0) & 31);
+    return ch in ANSI_ESCAPES ? ANSI_ESCAPES[ch] : m;
+  });
+}
+/** The value of a `"..."` body: a backslash escapes only `$`, a backtick, `"`, `\` and a newline (which it removes). */
+const dquoteDecode = (t) => t.replace(/\\([$`"\\\n])/g, (_, ch) => (ch === "\n" ? "" : ch));
+
+/**
+ * The lexer behind `shellClauses`. Returns null when a quote or substitution
+ * is unterminated, unless `tolerant`, when it runs to the end of the input.
+ */
+function lex(s, tolerant) {
   const n = s.length;
   const skipSingle = (j) => {
     const k = s.indexOf("'", j + 1);
@@ -469,11 +520,11 @@ function parseClauses(s) {
     }
     return -1;
   };
-  // `$(...)`, or `$((...))` arithmetic, which runs nothing itself but may hold
-  // a `$(...)` that does. Substitutions nested inside a `$(...)` are found
-  // again when its body is split.
-  const skipSubst = (j, into) => {
-    const arith = s[j + 2] === "(";
+  // `$(...)`, `<(...)`/`>(...)`, or `$((...))` arithmetic, which runs nothing
+  // itself but may hold a `$(...)` that does. Substitutions nested inside a
+  // body are found again when the body is split.
+  const skipSubst = (j, into, process = false) => {
+    const arith = !process && s[j + 2] === "(";
     let depth = 0;
     for (let k = j + 1; k < n; ) {
       const c = s[k];
@@ -504,48 +555,80 @@ function parseClauses(s) {
   const clauses = [];
   let cur = "";
   let subs = [];
-  let quoted = [];
+  let words = [];
+  let redirects = [];
+  // The word being read (`start` is its offset in `cur`), and a redirect still waiting for its target word.
+  let word = null;
+  let pending = null;
   // A `#` opens a comment only where a WORD starts: `$(pwd)#`, `a\ #` and `a\<newline>#` are one word.
   let wordStart = true;
+  const addToWord = (raw, value, quoted, piece = false) => {
+    if (!word) word = { text: "", quoted: false, pieces: [], start: cur.length };
+    word.text += value;
+    if (quoted) word.quoted = true;
+    if (piece) word.pieces.push(value);
+    cur += raw;
+    wordStart = false;
+  };
+  const endWord = () => {
+    if (!word) return;
+    const w = { text: word.text, quoted: word.quoted, pieces: word.pieces, start: word.start, end: cur.length };
+    word = null;
+    if (pending) {
+      redirects.push({ ...pending, target: w.text, quoted: w.quoted, pieces: w.pieces, end: w.end });
+      pending = null;
+    } else words.push(w);
+  };
+  const endRedirect = () => {
+    endWord();
+    if (pending) redirects.push({ ...pending, target: null, quoted: false, pieces: [], end: cur.length });
+    pending = null;
+  };
   const flush = (sep) => {
+    endRedirect();
+    const lead = cur.length - cur.trimStart().length;
     const t = cur.trim();
-    if (t) clauses.push({ text: t, piped: sep === "|", subs, quoted });
+    const at = (x) => ({ ...x, start: Math.max(0, x.start - lead), end: Math.min(t.length, x.end - lead) });
+    if (t) clauses.push({ text: t, piped: sep === "|", subs, words: words.map(at), redirects: redirects.map(at) });
     cur = "";
     subs = [];
-    quoted = [];
+    words = [];
+    redirects = [];
     wordStart = true;
   };
   for (let i = 0; i < n; ) {
     const c = s[i];
     if (c === "\\") {
       // A backslash-newline is removed (the line continues mid-word); any other escaped character is literal.
-      if (s[i + 1] !== "\n") {
-        cur += s.slice(i, i + 2);
-        wordStart = false;
-      }
+      if (s[i + 1] !== "\n") addToWord(s.slice(i, i + 2), s[i + 1] ?? "", true);
       i += 2;
       continue;
     }
     if (c === "$" && s[i + 1] === "$") {
-      cur += "$$";
+      addToWord("$$", "$$", false);
       i += 2;
-      wordStart = false;
       continue;
     }
     let k = null;
-    if (c === "'") k = skipSingle(i);
-    else if (c === "$" && s[i + 1] === "'") k = skipAnsi(i);
-    else if (c === '"') k = skipDouble(i, subs);
+    let kind = null;
+    if (c === "'") (k = skipSingle(i)), (kind = "'");
+    else if (c === "$" && s[i + 1] === "'") (k = skipAnsi(i)), (kind = "$'");
+    else if (c === '"') (k = skipDouble(i, subs)), (kind = '"');
     else if (c === "`") k = skipBacktick(i, subs);
     else if (c === "$" && s[i + 1] === "(") k = skipSubst(i, subs);
-    if (k === -1) return naiveClauses(s);
+    else if ((c === "<" || c === ">") && s[i + 1] === "(") k = skipSubst(i, subs, true);
     if (k !== null) {
+      const closed = k !== -1;
+      if (!closed) {
+        if (!tolerant) return null;
+        k = n;
+      }
       const piece = s.slice(i, k);
-      cur += piece;
-      if (c === "'" || c === '"') quoted.push(piece.slice(1, -1));
-      else if (c === "$" && s[i + 1] === "'") quoted.push(piece.slice(2, -1));
+      if (kind === "'") addToWord(piece, closed ? piece.slice(1, -1) : piece.slice(1), true, true);
+      else if (kind === "$'") addToWord(piece, ansiDecode(closed ? piece.slice(2, -1) : piece.slice(2)), true, true);
+      else if (kind === '"') addToWord(piece, dquoteDecode(closed ? piece.slice(1, -1) : piece.slice(1)), true, true);
+      else addToWord(piece, piece, false); // a substitution is passed on as written: what it expands to is not known
       i = k;
-      wordStart = false;
       continue;
     }
     if (c === "#" && wordStart) {
@@ -558,14 +641,46 @@ function parseClauses(s) {
       i += 2;
       continue;
     }
+    // `=>`, `->`, `>=` and `<=` are code, not redirections: what a quoted
+    // regex or JS program contains when the conservative scans below read it
+    // as shell (`k=>/[Pp]rimitive|.../` read as a redirect to `/[Pp]rimitive`
+    // once reported the filesystem root). Lexical, and it weakens no real
+    // redirect (`2>&1`, `>out`, `x >> log`, `<in` all still are).
+    const code = (c === ">" || c === "<") && (s[i - 1] === "=" || s[i - 1] === "-" || s[i + 1] === "=");
+    if (!code && (c === ">" || c === "<" || (c === "&" && s[i + 1] === ">"))) {
+      // `2>x`: a word of digits right before the operator is its file descriptor.
+      let fd = null;
+      let start;
+      if (c !== "&" && !pending && word && !word.quoted && /^\d+$/.test(word.text) && word.start + word.text.length === cur.length) {
+        fd = word.text;
+        start = word.start;
+        word = null;
+      } else {
+        endRedirect();
+        start = cur.length;
+      }
+      const op = c === "&" ? (s.startsWith("&>>", i) ? "&>>" : "&>") : c === ">" ? [">>", ">|", ">&"].find((o) => s.startsWith(o, i)) ?? ">" : ["<<<", "<<-", "<<", "<>", "<&"].find((o) => s.startsWith(o, i)) ?? "<";
+      cur += op;
+      i += op.length;
+      pending = { op, fd, start };
+      wordStart = true;
+      continue;
+    }
     if (c === "|" || c === ";" || c === "\n") {
       flush(c);
       i++;
       continue;
     }
-    cur += c;
+    if (c === " " || c === "\t" || c === "\r" || c === "&" || c === "(" || c === ")") {
+      // Whitespace ends a word; so do a background `&` and a group's parentheses, which are not words.
+      endWord();
+      cur += c;
+      i++;
+      wordStart = true;
+      continue;
+    }
+    addToWord(c, c, false);
     i++;
-    wordStart = /[\s&()<>]/.test(c);
   }
   flush("");
   return clauses;
@@ -603,37 +718,139 @@ export function inlineCodeFlag(verb, words) {
 
 /**
  * The code an inline-interpreter clause runs (`node -e CODE`, `python -c
- * CODE`), with the shell's quoting removed, and the clause WITHOUT it
- * (`shell`: the interpreter, its flags and any arguments after the code).
- * `flag` is the one `inlineCodeFlag` found. Null when the clause does not
- * carry it.
+ * CODE`): the WORD after the code flag, so its value is what the shell hands
+ * the interpreter (`-e 'a'"b"` runs `ab`). `words` are a clause's words from
+ * `shellClauses`; `flag` is the one `inlineCodeFlag` found. Returns the code
+ * and the word, whose span is the code's place in the clause text. Null when
+ * the clause does not carry it.
  */
-export function inlineCodeOf(clause, flag) {
-  const text = String(clause);
-  const m = new RegExp(`(?:^|\\s)${flag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s+`).exec(text);
-  if (!m) return null;
-  const at = m.index + m[0].length;
-  const rest = text.slice(at);
-  let code = "";
-  let end = rest.length;
-  if (rest.startsWith("'")) {
-    const k = rest.indexOf("'", 1);
-    end = k < 0 ? rest.length : k + 1;
-    code = rest.slice(1, k < 0 ? undefined : k);
-  } else if (rest.startsWith('"')) {
-    let k = 1;
-    for (; k < rest.length; k++) {
-      if (rest[k] === "\\" && /["\\$`]/.test(rest[k + 1] ?? "")) code += rest[++k];
-      else if (rest[k] === '"') break;
-      else code += rest[k];
-    }
-    end = Math.min(k + 1, rest.length);
-  } else {
-    code = rest.split(/\s/)[0];
-    end = code.length;
+export function inlineCodeOf(words, flag) {
+  for (let i = 1; i < words.length; i++) {
+    if (words[i].text === flag) return words[i + 1] ? { code: words[i + 1].text, word: words[i + 1] } : null;
+    if (!words[i].text.startsWith("-")) return null;
   }
-  return { code, shell: `${text.slice(0, at)} ${rest.slice(end)}` };
+  return null;
 }
+
+/** A word that sets a variable for the command after it (`FOO=1 cmd`). */
+const ASSIGNMENT = /^[A-Za-z_]\w*=/;
+/** Reserved words a command may follow in the same clause. */
+const PREFIX_WORDS = new Set(["!", "{", "if", "then", "else", "elif", "do", "while", "until"]);
+/**
+ * Commands that run their arguments as a command: the options of theirs that
+ * take a separate argument, whether `NAME=value` words may follow, and how
+ * many plain words come before the command (`timeout 5 cmd`).
+ */
+const WRAPPERS = {
+  sudo: { args: ["-u", "-g", "-h", "-p", "-C", "-D", "-r", "-t", "-U", "-T", "-R", "--user", "--group", "--host", "--prompt", "--close-from", "--chdir", "--role", "--type", "--other-user", "--command-timeout", "--chroot"], assigns: true },
+  doas: { args: ["-u", "-C"] },
+  env: { args: ["-u", "--unset", "-C", "--chdir", "-S", "--split-string"], assigns: true },
+  xargs: { args: ["-I", "-n", "-P", "-d", "-a", "-E", "-L", "-s", "-R", "--max-args", "--max-procs", "--delimiter", "--arg-file", "--eof", "--max-lines", "--max-chars", "--process-slot-var"] },
+  nohup: {},
+  time: { args: ["-f", "-o", "--format", "--output"] },
+  nice: { args: ["-n", "--adjustment"] },
+  ionice: { args: ["-c", "-n", "-p", "-P", "-u", "--class", "--classdata"] },
+  timeout: { args: ["-s", "-k", "--signal", "--kill-after"], positional: 1 },
+  command: {},
+  builtin: {},
+  exec: { args: ["-a"] },
+  stdbuf: { args: ["-i", "-o", "-e", "--input", "--output", "--error"] },
+};
+// A leading `!` is git's mark for an alias that runs a shell command (`alias.x="!bash -c ..."`).
+const commandName = (w) => String(w ?? "").replace(/^!/, "").replace(/^.*[\\/]/, "").replace(/\.exe$/i, "").toLowerCase();
+
+/**
+ * Where the command a clause runs is named, from word `i`: past variable
+ * assignments, reserved words and the wrappers above (`sudo -u x env A=1
+ * nohup timeout 5 bash -c ...` runs bash). `words` are strings.
+ */
+export function commandIndex(words, i = 0) {
+  while (i < words.length) {
+    if (PREFIX_WORDS.has(words[i]) || ASSIGNMENT.test(words[i])) {
+      i++;
+      continue;
+    }
+    const spec = WRAPPERS[commandName(words[i])];
+    if (!spec) return i;
+    i++;
+    while (i < words.length) {
+      const x = words[i];
+      if (x === "--") {
+        i++;
+        break;
+      }
+      if (/^-./.test(x)) i += spec.args?.includes(x) ? 2 : 1;
+      else if (spec.assigns && ASSIGNMENT.test(x)) i++;
+      else break;
+    }
+    i += spec.positional ?? 0;
+  }
+  return i;
+}
+
+const SHELL_NAME = /^(?:bash|sh|zsh|dash|ksh|mksh)$/;
+/**
+ * When `words[j]` is a shell given `-c` (any flags around it, combined or
+ * not: `bash -lc`, `sh -xc`, `bash --norc -o pipefail -c`), the index of the
+ * command string it runs; otherwise -1. `words` are strings.
+ */
+export function shellCommandString(words, j) {
+  if (!SHELL_NAME.test(commandName(words[j]))) return -1;
+  let c = false;
+  for (let i = j + 1; i < words.length; i++) {
+    const x = words[i];
+    if (x === "--" || x === "-") return c && i + 1 < words.length ? i + 1 : -1;
+    if (/^--./.test(x)) {
+      if (x === "--rcfile" || x === "--init-file") i++;
+      continue;
+    }
+    if (/^[-+][A-Za-z]+$/.test(x)) {
+      if (x[0] === "-" && x.includes("c")) c = true;
+      if (/[oO]/.test(x)) i++; // `-o pipefail`, `-O extglob`
+      continue;
+    }
+    return c ? i : -1;
+  }
+  return -1;
+}
+
+/** `text` with each `{ start, end }` span overwritten by spaces, so every other offset still holds. */
+function blankSpans(text, spans) {
+  const t = String(text);
+  if (!spans.length) return t;
+  // Marked once and rebuilt once: a clause with thousands of redirections stays linear.
+  const blank = new Int32Array(t.length + 1);
+  for (const { start, end } of spans) {
+    blank[Math.max(0, Math.min(t.length, start))]++;
+    blank[Math.max(0, Math.min(t.length, end))]--;
+  }
+  let out = "";
+  let depth = 0;
+  for (let i = 0; i < t.length; i++) {
+    depth += blank[i];
+    out += depth > 0 ? " " : t[i];
+  }
+  return out;
+}
+
+/**
+ * Does this text, read as a command line, hand a program to a shell with
+ * `-c` anywhere in its words (`bash -c 'ls /'`, `ssh h sh -c x`)? Used on a
+ * quoted string the clause's command may itself run (`su -c "..."`, `watch
+ * "..."`, `ssh h "..."`, `... | sh`).
+ */
+function handsShellC(text) {
+  // Lenient on purpose (it only decides whether the piece is ALSO scanned as a
+  // command line): `!bash -c` in a git alias, `system("bash -c ...")` in awk.
+  return /(?:^|[^\w.-])(?:bash|sh|zsh|dash|ksh|mksh)(?:\.exe)?\s(?:[^;&|\n]*?\s)?-[A-Za-z]*c(?:\s|$)/i.test(text);
+}
+
+/**
+ * Commands whose quoted arguments are TEXT (a message, a pattern), never a
+ * program they run: a `bash -c` quoted in their arguments is only text, unless
+ * their output is piped on (`echo "bash -c 'ls /'" | sh`).
+ */
+const TEXT_VERBS = new Set(["echo", "printf", "grep", "egrep", "fgrep", "rg", "jq", "true", ":", "test", "["]);
 
 /**
  * Code reads the directory it runs in through these, without naming it:
@@ -941,28 +1158,34 @@ function unquote(s) {
   return /^(["']).*\1$/.test(t) ? t.slice(1, -1) : t;
 }
 
-/** Quote-aware words of one clause. */
-function shellWords(clause) {
-  return (String(clause).match(/"[^"]*"|'[^']*'|[^\s]+/g) ?? []).map(unquote);
-}
+/** A marker `splitHeredocs` or the subshell lift left in a command. */
+const LIFT_MARKER = /__PCG(?:HEREDOC|SUBSHELL)\d+__/g;
 
-/** A clause's output redirections: the clause without them, and their targets. */
-export function stripRedirects(clause) {
+/** Devices a redirect can name that are no file. */
+const NO_FILE = /^\/dev\/null$|^NUL$|^\$null$/i;
+
+/**
+ * A clause's output redirections, from the `redirects` `shellClauses` found
+ * OUTSIDE quotes: the files it truncates (`targets`) and appends to
+ * (`appends`), and their spans in the clause text (`spans`), which name no
+ * file the clause reads. An input redirection (`< f`) stays in the text,
+ * where its file is read the way any other argument is.
+ *
+ * A `>` inside quoted code is the code's (`node -e "a > b"` compares): the
+ * first redirect finder read the raw text and cut the code at it. A dup
+ * (`2>&1`, `>&-`) and a null device name no file.
+ */
+export function clauseRedirects(clause) {
   const targets = [];
   const appends = [];
-  // `=>` and `>=` are JS, not shell. An arrow function is ordinary in the
-  // code these agents write, and reading `k=>/[Pp]rimitive|.../` as a
-  // redirect to `/[Pp]rimitive` truncated it at the glob to a bare `/` and
-  // reported the filesystem root — one pilot run discarded over a regex
-  // literal. So a `>` preceded by `=` or `-`, or followed by `=`, redirects
-  // nothing. This is lexical: it needs no JS parsing, and it does not
-  // weaken any real redirect (`2>&1`, `>out`, `x >> log` all still match).
-  const text = String(clause).replace(/(?:^|(?<=[^<>&0-9=-]))(\d?>>?|&>>?)\s*("[^"]*"|'[^']*'|[^\s;&|<>=]+)/g, (_, op, target) => {
-    const t = unquote(target);
-    if (!/^&\d*$|^\/dev\/null$|^NUL$|^\$null$/i.test(t)) (op.endsWith(">>") ? appends : targets).push(t);
-    return " ";
-  });
-  return { text, targets, appends };
+  const spans = [];
+  for (const r of clause?.redirects ?? []) {
+    if (!/^(?:>|>>|>\||&>|&>>|>&)$/.test(r.op)) continue;
+    spans.push(r);
+    if (r.target === null || NO_FILE.test(r.target) || (r.op === ">&" && /^(?:\d+|-)$/.test(r.target))) continue;
+    (r.op.endsWith(">>") ? appends : targets).push(r.target);
+  }
+  return { targets, appends, spans };
 }
 
 const BENIGN_PREFIXES_WIN = ["C:\\Windows\\", "C:\\Program Files\\Git\\", "C:\\Program Files\\nodejs\\"];
@@ -1135,7 +1358,11 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
   }
 
   const resolveArg = (arg, base) => {
-    const a = unquote(arg);
+    // `cd C:\Users` unquoted reaches the shell as `C:Users` (bash drops the
+    // backslash), and Git Bash takes that drive-relative form from the drive's
+    // ROOT: it lands in /c/Users. Resolved Windows' way it would be a folder
+    // under the sandbox, on the sandbox's own drive.
+    const a = unquote(arg).replace(process.platform === "win32" ? /^([A-Za-z]:)(?![\\/])(?=.)/ : /$^/, "$1\\");
     return tokenPath(a, base) ?? resolve(base, a);
   };
 
@@ -1235,29 +1462,19 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
    * A nested call (a subshell, a heredoc fed to bash) is handed a copy and
    * its result is discarded: that is what makes `( cd x )` local.
    */
-  const scanShell = (raw, depth = 0, startState = { cwd: sandbox, prev: sandbox, stack: [] }) => {
+  const scanShell = (raw, depth = 0, startState = { cwd: sandbox, prev: sandbox, stack: [] }, evalDepth = 0) => {
     const split = splitHeredocs(raw);
     const heredocs = split.heredocs;
-    // `eval '...'` runs its string in THIS shell (a `cd` inside it moves the shell); `bash -c '...'`
-    // runs it in a subshell. Both are lifted out whole before the command is split at separators,
-    // which would otherwise cut through their quotes.
+    // `( cd x && ... )` runs in a CHILD shell: the parent never moves. Only
+    // groups that actually change directory are lifted, so a parenthesis in
+    // ordinary code (`node -e "console.log(1)"`) is left alone. `$(` is
+    // excluded — command substitution is the tokeniser's business.
     const subshells = [];
-    const command = split.command
-      .replace(/\beval\s+(?:'([^']*)'|"((?:[^"\\]|\\.)*)"|\$'((?:[^'\\]|\\.)*)')/g, (_, a, b, c) => a ?? b ?? c)
-      // Any flags before the `-c`, combined or not: `bash -lc`, `sh -xc`, `bash --norc -c`.
-      .replace(/\b(?:bash|sh|zsh|dash|ksh|mksh)(?:\.exe)?(?:\s+(?:-[A-Za-z]+|--[\w-]+))*?\s+-[A-Za-z]*c\s+(?:'([^']*)'|"((?:[^"\\]|\\.)*)")/g, (_, a, b) => {
-        subshells.push(a ?? b);
-        return ` __PCGSUBSHELL${subshells.length - 1}__ `;
-      })
-      // `( cd x && ... )` runs in a CHILD shell: the parent never moves. Only
-      // groups that actually change directory are lifted, so a parenthesis in
-      // ordinary code (`node -e "console.log(1)"`) is left alone. `$(` is
-      // excluded — command substitution is the tokeniser's business.
-      .replace(/(?<![$\w])\(([^()]*)\)/g, (whole, body) => {
-        if (!/(?:^|[\s;&|])(?:cd|pushd|popd)(?:[\s;&|]|$)/.test(body)) return whole;
-        subshells.push(body);
-        return ` __PCGSUBSHELL${subshells.length - 1}__ `;
-      });
+    const command = split.command.replace(/(?<![$\w])\(([^()]*)\)/g, (whole, body) => {
+      if (!/(?:^|[\s;&|])(?:cd|pushd|popd)(?:[\s;&|]|$)/.test(body)) return whole;
+      subshells.push(body);
+      return ` __PCGSUBSHELL${subshells.length - 1}__ `;
+    });
     let vcwd = startState.cwd;
     let prevCwd = startState.prev;
     // A `pushd` inside a subshell must not survive it, so the stack is copied.
@@ -1266,16 +1483,68 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
     const child = (cmd) => {
       if (depth < 3) scanShell(cmd, depth + 1, { cwd: vcwd, prev: prevCwd, stack: dirStack });
     };
-    for (const { text: rawSeg, piped, subs, quoted } of shellClauses(command)) {
+    const clauses = shellClauses(command);
+    for (const [ci, clause] of clauses.entries()) {
+      const { text: rawSeg, piped, subs } = clause;
       const markers = [...rawSeg.matchAll(/__PCGHEREDOC(\d+)__/g)].map((m) => heredocs[Number(m[1])]).filter(Boolean);
       for (const m of rawSeg.matchAll(/__PCGSUBSHELL(\d+)__/g)) child(subshells[Number(m[1])] ?? "");
       // `$(...)` and backticks run first, in a child shell from here: their
       // commands are judged as commands. The clause keeps their text too, so
       // what it names is still read the way it always was.
       for (const body of subs) child(body);
-      const seg = rawSeg.replace(/__PCGHEREDOC\d+__|__PCGSUBSHELL\d+__/g, " ");
-      const { text, targets, appends } = stripRedirects(seg);
-      const words = shellWords(text);
+      // The clause's words with the lifting markers taken out (a marker is a word of its own, or sits inside a quoted one).
+      const all = clause.words.map((w) => ({ ...w, text: w.text.replace(LIFT_MARKER, " ") })).filter((w) => w.quoted || w.text.trim());
+      const allText = all.map((w) => w.text);
+      // What the clause hands a shell, read from the words in COMMAND position
+      // (past assignments and wrappers: sudo, env, xargs, nohup, time, nice,
+      // timeout, command, ...), never from the raw line, where `bash -c`
+      // inside a quoted string is only text.
+      // - `eval WORDS` runs its words, joined, in THIS shell: a `cd` in them moves it.
+      // - `bash -c STRING` runs STRING in a child shell; so does a `find -exec sh -c`.
+      // Both are taken out of the clause, which is judged without them.
+      const lifted = new Set();
+      const handed = new Set();
+      const liftedSpans = [];
+      const at = commandIndex(allText);
+      if (allText[at] === "eval" && evalDepth < 16) {
+        for (let j = at; j < all.length; j++) lifted.add(j);
+        if (at < all.length) liftedSpans.push({ start: all[at].start, end: all.at(-1).end });
+        // `eval eval -- x` runs x: every leading eval, and the `--` that ends eval's options, go at once.
+        let from = at;
+        while (allText[from] === "eval" || allText[from] === "--") from++;
+        // Its words are shorter than this command and the nesting is bounded, so the recursion ends.
+        const st = scanShell(allText.slice(from).join(" "), depth, { cwd: vcwd, prev: prevCwd, stack: dirStack }, evalDepth + 1);
+        vcwd = st.cwd;
+        prevCwd = st.prev;
+        dirStack.splice(0, dirStack.length, ...st.stack);
+      } else {
+        const positions = [at];
+        if (commandName(allText[at]) === "find") for (const [j, w] of allText.entries()) if (j > at && /^-(?:exec|execdir|ok|okdir)$/.test(w)) positions.push(commandIndex(allText, j + 1));
+        for (const p of positions) {
+          const s = shellCommandString(allText, p);
+          if (s < 0) continue;
+          child(allText[s]);
+          handed.add(s);
+          for (let j = p; j <= s; j++) lifted.add(j);
+          liftedSpans.push({ start: all[p].start, end: all[s].end });
+        }
+        // A shell given `-c` as the ARGUMENT of a command not known to run one
+        // (`ssh host bash -c ...`, `docker exec c sh -c ...`) may still run it:
+        // judged as a child too, and left in the clause as well.
+        for (let j = 0; j < all.length; j++) {
+          if (lifted.has(j)) continue;
+          const s = shellCommandString(allText, j);
+          if (s >= 0 && !handed.has(s)) {
+            child(allText[s]);
+            handed.add(s);
+          }
+        }
+      }
+      const kept = all.filter((_, j) => !lifted.has(j));
+      const { targets, appends, spans: redirectSpans } = clauseRedirects(clause);
+      // The clause as the rest of the scan reads it: no output redirections, nothing lifted, no markers.
+      const text = blankSpans(rawSeg, [...redirectSpans, ...liftedSpans]).replace(LIFT_MARKER, (m) => " ".repeat(m.length));
+      const words = kept.map((w) => w.text);
       const verb = (words[0] ?? "").replace(/^.*[\\/]/, "").replace(/\.exe$/i, "").toLowerCase();
       if (CD_VERBS.has(verb)) {
         // `-` is `cd`'s ARGUMENT, not a flag: skipping it the way a flag is
@@ -1316,7 +1585,8 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
       // pre-existing rather than on the fact that this command made it.
       // Long forms only — `-o` is "only-matching" to grep and friends, and
       // guessing wrong there would invent writes that never happened.
-      for (const [i, w] of words.entries()) {
+      // Not for a command that only prints or matches its arguments: `echo --out=/tmp/x` writes nothing.
+      for (const [i, w] of TEXT_VERBS.has(verb) ? [] : words.entries()) {
         const m = /^--(?:out|output|outfile|out-file|out-dir|output-dir)(?:=(.*))?$/i.exec(w);
         if (!m) continue;
         const target = m[1] ?? words[i + 1];
@@ -1337,14 +1607,33 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
       const interpreter = /^python\d(?:\.\d+)?$/.test(verb) ? "python3" : verb;
       const codeFlag = inlineCodeFlag(interpreter, words);
       const inlineCode = codeFlag !== null;
-      const inline = inlineCode ? inlineCodeOf(text, codeFlag) : null;
+      const inline = inlineCode ? inlineCodeOf(kept, codeFlag) : null;
       // A quoted string with a separator in it is a shell program when the
       // command hands it to a shell (`bash -lc '...'`, `ssh host '...'`,
       // `echo '...' | sh`, `watch '...'`), and the classifier cannot know
       // which commands do. So it is judged as one, from here, in a child
       // shell; inline code is not (it is judged as code). The first splitter
       // got the same coverage by cutting through every quote.
-      if (!inlineCode) for (const qs of quoted) if (/[;&|\n]/.test(qs)) child(qs);
+      // Each quoted PIECE is judged, not the word around it: in
+      // `x='cd ~ && cat .npmrc'` or `--exec='...'` the program is the piece.
+      // A piece without a separator is still a program when it hands one to a
+      // shell (`su -c "bash -c 'ls /'"`), unless the command only prints or
+      // matches its arguments and nothing reads what it prints.
+      // A here-string (`<<< '...'`) is quoted text too, and fed to a shell it
+      // IS the program; so is everything a clause pipes into a shell.
+      const hereStrings = clause.redirects.filter((r) => r.op === "<<<" && r.target !== null);
+      const nextWords = piped ? (clauses[ci + 1]?.words ?? []).map((w) => w.text) : [];
+      const nextAt = commandIndex(nextWords);
+      const pipedToShell = piped && SHELL_NAME.test(commandName(nextWords[nextAt])) && shellCommandString(nextWords, nextAt) < 0;
+      const feedsShell = SHELL_NAME.test(commandName(allText[at])) && shellCommandString(allText, at) < 0;
+      if (!inlineCode) {
+        const textOnly = TEXT_VERBS.has(verb) && !piped;
+        const pieces = [...all.flatMap((w, j) => (lifted.has(j) || handed.has(j) ? [] : w.pieces ?? [])), ...hereStrings.flatMap((r) => r.pieces ?? [])];
+        for (const p of pieces) if (/[;&|\n]/.test(p) || pipedToShell || (!textOnly && handsShellC(p))) child(p);
+        if (feedsShell) for (const r of hereStrings) child(r.target);
+        // `echo ls / | sh`: what echo prints is the program.
+        if (pipedToShell && (verb === "echo" || verb === "printf")) child(words.slice(1).filter((w) => !/^-[neE]+$/.test(w)).join(" "));
+      }
       const recursive = inlineCode || RECURSIVE_SEGMENT.test(text) || /\.\.[\\/]\S*[*?[{]|--recursive|\brecursive\s*:\s*true/.test(text);
       // A bare `/` is the root only as an argument of a filesystem command; elsewhere it divides or splits.
       const bareRoot = /^(?:sudo\s+)?(?:\S*[\\/])?(?:find|ls|dir|tree|du|rg|ag|fd|e?grep|fgrep|Get-ChildItem|gci|cat|cp|tar|zip|stat)\b/i.test(text);
@@ -1352,7 +1641,7 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
       const writtenHere = new Set(targets.map((t) => resolveArg(t, vcwd).toLowerCase()));
       const destHere = new Set((COPY_VERBS.has(verb) ? (targetDir ? [targetDir] : flagless.slice(-1)) : WRITE_ALL_VERBS.has(verb) ? flagless : []).map((w) => resolveArg(w, vcwd).toLowerCase()));
       // Inline code (`node -e`, `python -c`) writes through fs calls, not
-      // through the shell, so its writes are invisible to stripRedirects.
+      // through the shell, so its writes are not redirections.
       const codeWrites = scriptWrites(text);
       // A depth-0 `find` names its starting points and reads nothing: they are recorded like a `cd` target.
       // Only while what it prints reaches nothing but the terminal: not piped on, not saved to a file.
@@ -1369,7 +1658,7 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
           continue;
         }
         // Inline code (`node -e`, `python -c`) writes through fs calls, not
-        // through the shell, so its writes are invisible to stripRedirects.
+        // through the shell, so its writes are not redirections.
         if (codeWrites.has(token)) touch(path, { write: "create", base: vcwd });
         else touch(path, { recursive: recursive || glob, content: CONTENT_VERBS.has(verb), nodeEntry: verb === "node" && token === flagless[0] });
       }
@@ -1379,7 +1668,7 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
         // Outside the sandbox, anything that names a file relative to where the shell is names it THERE,
         // whatever the command (xargs, python, diff, base64, a `$(cat ...)` inside echo).
         // Inline code's own text is judged as code (judgeCode, above); the rest of the clause as shell words.
-        for (const t of commandTokens(inline ? inline.shell : text).fine.slice(1)) {
+        for (const t of commandTokens(inline ? blankSpans(text, [inline.word]) : text).fine.slice(1)) {
           if (!pathLike(t) || tokenPath(t, vcwd) || (verb === "node" && t === flagless[0])) continue;
           const key = resolveArg(t, vcwd).toLowerCase();
           if (writtenHere.has(key) || destHere.has(key) || statOnly.has(key)) continue;
