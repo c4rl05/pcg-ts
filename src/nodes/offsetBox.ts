@@ -30,13 +30,12 @@
  * and the topology carried; only boundsMin/boundsMax are rewritten, in the
  * coordinates they hold (P, rot and scale are not read, as in splitBox).
  */
-import { canonicalOneOf } from "../diagnostics/canonical.js";
 import { deriveGeometry } from "../data/derive.js";
-import { isField } from "../fields/index.js";
 import { makeGeometryItem } from "../graph/index.js";
-import { type FitWord, fitGlossary, fitRefusal } from "./boxFit.js";
-import { BOX_FRAMES, FACE_AXIS_NAMES, type FaceFrameColumns, decodeFaceFrame, readFaceFrame } from "./faceFrame.js";
-import { BOX_SNAP_MODES, SNAP_TO, ULP_TOL, decodeBoxSnap, f32HalfUlp, f32Ulp, snapBoxAxis } from "./latticeSnap.js";
+import { type InsideOutWording, requireBoxColumns, requireCellBoxAxis, resolveWhere } from "./boxCells.js";
+import { type FitWord, decodeFit, fitGlossary } from "./boxFit.js";
+import { BOX_FRAMES, FACE_AXIS_NAMES, type FaceFrameColumns, decodeBoxFrame, decodeFaceFrame, readFaceFrame } from "./faceFrame.js";
+import { BOX_SNAP_MODES, SNAP_TO, decodeBoxSnap, requireSnapSteps, snapBoxAxis, sumTol } from "./latticeSnap.js";
 import type {
   OffsetBoxInputs,
   OffsetBoxOutputs,
@@ -48,7 +47,6 @@ import {
   readComp,
   requireFinitePlainParam,
   requireGeometry,
-  requireScalarColumn,
   requireVec3Column,
   resolveOn,
 } from "./util.js";
@@ -64,6 +62,13 @@ const AXIS_NAMES = ["x", "y", "z"] as const;
 /** Fit codes, decided once. */
 const FIT_ERROR = 0;
 const FIT_ALLOW = 2; // 1 is "scale"
+
+/** A cell box this node cannot offset, in its words. */
+const BOX_TAIL = 'so it has no face to move. Fix the setBounds that made it, or leave the cell out with "where".';
+const BOX_INSIDE_OUT: InsideOutWording = {
+  state: "ARRIVED inside out",
+  tail: 'so its faces have no inside to move from. Fix the node that made it, leave the cell out with "where", or set "fit" to "allow" to offset it as it is.',
+};
 
 /** Every cell's box with each face moved out (or in) by a signed offset. */
 export const offsetBox = standardNode<OffsetBoxParams, OffsetBoxInputs, OffsetBoxOutputs>({
@@ -157,33 +162,13 @@ export const offsetBox = standardNode<OffsetBoxParams, OffsetBoxInputs, OffsetBo
   execute({ inputs, params, seed, checkCancelled }) {
     // ---- params, decided ONCE: every string becomes a code here, and no
     // string reaches the per-cell loop.
-    const frameName = canonicalOneOf(BOX_FRAMES, params.frame);
-    if (frameName === undefined) {
-      throw new Error(
-        `${NODE}: param "frame" is ${JSON.stringify(params.frame)}; valid: ${BOX_FRAMES.join(", ")} — "face" is the frame shellSplit writes (along, up, out), read from alongAxisAttr, alongSignAttr and outwardAttr.`,
-      );
-    }
-    const faceFrame = frameName === "face";
-    const fitName = canonicalOneOf(FITS, params.fit);
-    if (fitName === undefined) {
-      throw new Error(
-        fitRefusal(NODE, params.fit, FITS, {
-          clamp: "a face offset has no cell to slide back into: its limit is the box's own other face, and \"scale\" is how two faces meet",
-          clip: "faces move rather than being cut: a face's limit is the box's own other face, and to stop an inset there use \"scale\", which shrinks the inward moves in proportion until the faces meet (a one-sided inset meets on the far face)",
-        }),
-      );
-    }
-    const fit = (FITS as readonly string[]).indexOf(fitName);
+    const faceFrame = decodeBoxFrame(NODE, params.frame);
+    const fit = decodeFit(NODE, params.fit, FITS, {
+      clamp: "a face offset has no cell to slide back into: its limit is the box's own other face, and \"scale\" is how two faces meet",
+      clip: "faces move rather than being cut: a face's limit is the box's own other face, and to stop an inset there use \"scale\", which shrinks the inward moves in proportion until the faces meet (a one-sided inset meets on the far face)",
+    });
     const snapRule = decodeBoxSnap(NODE, params.snapMode, params.snapTo);
-    const snap = params.snap;
-    for (let a = 0; a < 3; a++) {
-      const v = snap[a];
-      if (typeof v !== "number" || !Number.isFinite(v) || v < 0) {
-        throw new Error(
-          `${NODE}: param "snap" component ${a} (${AXIS_NAMES[a]}) is ${typeof v === "number" ? String(v) : JSON.stringify(v)}; a lattice step is a finite number >= 0, and 0 means no snapping on that axis.`,
-        );
-      }
-    }
+    const snap = requireSnapSteps(NODE, params.snap);
     for (const name of ["margin", "marginMin", "marginMax"] as const) {
       requireFinitePlainParam(
         params[name],
@@ -198,14 +183,10 @@ export const offsetBox = standardNode<OffsetBoxParams, OffsetBoxInputs, OffsetBo
     const src = requireGeometry(inputs, "in", NODE);
     const srcSet = src.attrs.point;
     const n = srcSet.count;
-    for (const name of ["boundsMin", "boundsMax"] as const) {
-      const attr = srcSet.get(name);
-      if (attr === undefined || attr.type !== "f32" || attr.tupleSize !== 3) {
-        throw new Error(
-          `${NODE}: the input on pin "in" ${attr === undefined ? `has no "${name}" point attribute` : `has "${name}" as ${attr.type} tupleSize ${attr.tupleSize}`}; a cell's box is the standard f32 tuple-3 pair boundsMin/boundsMax. Give the cells their boxes with setBounds first.`,
-        );
-      }
-    }
+    // The input's corners, taken before the output's columns are made
+    // writable: `deriveGeometry` shares columns copy-on-write, so these
+    // stay the input's while the writable views below are the output's.
+    const { lo, hi } = requireBoxColumns(NODE, srcSet, "in");
 
     // ---- per-cell values, resolved on the INPUT before anything is written
     const [mCol, minCol, maxCol] = (["margin", "marginMin", "marginMax"] as const).map((name) =>
@@ -217,29 +198,10 @@ export const offsetBox = standardNode<OffsetBoxParams, OffsetBoxInputs, OffsetBo
         `an offset is a distance per ${faceFrame ? "frame axis [along, up, out]" : "axis [x, y, z]"} of the box`,
       ),
     );
-    let whereCol: ArrayLike<number> | undefined;
-    let whereAll = true;
-    if (isField(params.where)) {
-      whereCol = requireScalarColumn(
-        resolveOn(src, "point", params.where, seed, NODE, "where"),
-        NODE,
-        "where",
-        "cell",
-        "an offset-or-leave flag",
-      ).data;
-    } else {
-      whereAll = (params.where as number) !== 0;
-    }
+    const offsets = resolveWhere(src, params.where, seed, NODE, "an offset-or-leave flag");
 
-    const frameCols: FaceFrameColumns | undefined = faceFrame
-      ? readFaceFrame(NODE, srcSet, { alongAxisAttr: params.alongAxisAttr, alongSignAttr: params.alongSignAttr, outwardAttr: params.outwardAttr })
-      : undefined;
+    const frameCols: FaceFrameColumns | undefined = faceFrame ? readFaceFrame(NODE, srcSet, params) : undefined;
 
-    // The input's corners, taken before the output's columns are made
-    // writable: `deriveGeometry` shares columns copy-on-write, so these
-    // stay the input's while the writable views below are the output's.
-    const lo = srcSet.require("boundsMin").data as Float32Array;
-    const hi = srcSet.require("boundsMax").data as Float32Array;
     const out = deriveGeometry(src);
     const oLo = out.attrs.point.require("boundsMin").writable() as Float32Array;
     const oHi = out.attrs.point.require("boundsMax").writable() as Float32Array;
@@ -254,7 +216,7 @@ export const offsetBox = standardNode<OffsetBoxParams, OffsetBoxInputs, OffsetBo
 
     for (let i = 0; i < n; i++) {
       if ((i & (CANCEL_STRIDE - 1)) === 0) checkCancelled();
-      if (whereCol === undefined ? !whereAll : whereCol[i] === 0) continue;
+      if (!offsets(i)) continue;
 
       if (frameCols === undefined) {
         for (let k = 0; k < 3; k++) {
@@ -288,24 +250,15 @@ export const offsetBox = standardNode<OffsetBoxParams, OffsetBoxInputs, OffsetBo
         let l = l0 - dMin[k];
         let h = h0 + dMax[k];
         if (fit !== FIT_ALLOW) {
-          if (!Number.isFinite(l0) || !Number.isFinite(h0)) {
+          requireCellBoxAxis(NODE, i, k, l0, h0, BOX_TAIL, BOX_INSIDE_OUT);
+          // A finite offset can still overflow what a box stores: an f32
+          // margin of 3e38 on a box at 1e38 is infinite, and so is a face
+          // under it. Refused here rather than written as a box with no face.
+          if (!Number.isFinite(Math.fround(l)) || !Number.isFinite(Math.fround(h))) {
             throw new Error(
-              `${NODE}: cell ${i}'s box is not finite along ${AXIS_NAMES[k]} — boundsMin ${l0}, boundsMax ${h0} — so it has no face to move. Fix the setBounds that made it, or leave the cell out with "where".`,
+              `${NODE}: cell ${i}'s box along ${AXIS_NAMES[k]} is offset past what f32 bounds hold — boundsMin ${l0} becomes ${l}, boundsMax ${h0} becomes ${h} (the offsets there are ${-dMin[k]} and ${dMax[k]}). Bound the offset, or set "fit" to "allow" to write it as computed.`,
             );
           }
-          if (!(h0 >= l0)) {
-            throw new Error(
-              `${NODE}: cell ${i}'s box ARRIVED inside out along ${AXIS_NAMES[k]} — boundsMin ${l0} is above boundsMax ${h0} — so its faces have no inside to move from. Fix the node that made it, leave the cell out with "where", or set "fit" to "allow" to offset it as it is.`,
-            );
-          }
-        }
-        // A finite offset can still overflow what a box stores: an f32
-        // margin of 3e38 on a box at 1e38 is infinite, and so is a face
-        // under it. Refused here rather than written as a box with no face.
-        if (fit !== FIT_ALLOW && (!Number.isFinite(Math.fround(l)) || !Number.isFinite(Math.fround(h)))) {
-          throw new Error(
-            `${NODE}: cell ${i}'s box along ${AXIS_NAMES[k]} is offset past what f32 bounds hold — boundsMin ${l0} becomes ${l}, boundsMax ${h0} becomes ${h} (the offsets there are ${-dMin[k]} and ${dMax[k]}). Bound the offset, or set "fit" to "allow" to write it as computed.`,
-          );
         }
         // ---- snap, every face of a snapped axis
         const step = snap[k];
@@ -324,13 +277,13 @@ export const offsetBox = standardNode<OffsetBoxParams, OffsetBoxInputs, OffsetBo
           const b = Math.max(0, h0 - h);
           // To f32 precision at the faces' own coordinates, plus half an f32
           // ulp of each inward move, as shellSplit judges its two
-          // thicknesses: each margin is an f32 that sits up to half an ulp
-          // from the decimal it was written as, so [-1084.5, 10] inset by
-          // 1084.8 and 9.7 meets at 0.3 yet crosses by 4.9e-5, past two
-          // ulps there. Never a share of the span, which let a real
+          // thicknesses (sumTol): each margin is an f32 that sits up to half
+          // an ulp from the decimal it was written as, so [-1084.5, 10]
+          // inset by 1084.8 and 9.7 meets at 0.3 yet crosses by 4.9e-5, past
+          // two ulps there. Never a share of the span, which let a real
           // over-inset of a long box meet silently. Lattice faces are
           // lattice lines: no tolerance there.
-          const tol = onLattice ? 0 : ULP_TOL * f32Ulp(Math.max(Math.abs(l), Math.abs(h))) + f32HalfUlp(a) + f32HalfUlp(b);
+          const tol = onLattice ? 0 : sumTol(l, h, a, b);
           if (fit === FIT_ERROR && cross > tol) {
             const names = frameCols !== undefined ? faceNames(k, fAxis, fSign) : [`min (${AXIS_NAMES[k]}0)`, `max (${AXIS_NAMES[k]}1)`];
             throw new Error(

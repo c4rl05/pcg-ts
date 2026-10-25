@@ -7,6 +7,7 @@ import {
   AttributeNotFoundError,
   Geometry,
   PRIMTYPE_ATTR,
+  STANDARD_POINT_ATTRS,
   type AttrData,
   type AttrType,
   type Attribute,
@@ -498,6 +499,39 @@ export function readComp(col: Column, i: number, k: number): number {
 /** `f32x3`, or just `bool` when the tuple is 1 — the golden's spelling. */
 function shapeLabel(type: AttrType, tupleSize: number): string {
   return tupleSize === 1 ? type : `${type}x${tupleSize}`;
+}
+
+/**
+ * Refuses a name param that would WRITE one of the standard point
+ * attributes (P, rot, scale, density, boundsMin, boundsMax, color, seed),
+ * whose meaning every node downstream relies on: the message names the
+ * node, the param and the list, says `why` (by default that very
+ * reliance), and suggests `suggestion`. A name that is not standard,
+ * "" included, passes.
+ */
+export function refuseStandardPointName(
+  node: string,
+  param: string,
+  name: string,
+  suggestion: string,
+  why = "whose meaning every other node relies on",
+): void {
+  if (!STANDARD_POINT_ATTRS.some((std) => std.name === name)) return;
+  throw new Error(
+    `${node}: param "${param}" cannot write "${name}" — it is a standard point attribute (${STANDARD_POINT_ATTRS.map((std) => std.name).join(", ")}), ${why}. Name an attribute of your own instead (e.g. "${suggestion}").`,
+  );
+}
+
+/**
+ * The `why` of {@link refuseStandardPointName} for a node that writes a
+ * fresh seed and a box on every piece it cuts (`splitBox`, `shellSplit`):
+ * those two names are this node's own columns, not only the library's;
+ * `undefined` for any other name.
+ */
+export function pieceColumnClash(name: string): string | undefined {
+  if (name === "seed") return "and this node writes a fresh seed on every piece, so the two would fight over one column";
+  if (name === "boundsMin" || name === "boundsMax") return "and this node writes every piece's box there";
+  return undefined;
 }
 
 /** One reporting slot to check — see {@link requireReportSlot}. */

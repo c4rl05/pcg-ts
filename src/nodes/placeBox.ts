@@ -41,13 +41,12 @@
  * along and outward read, up derived), so one placement serves every wall.
  */
 import { canonicalOneOf } from "../diagnostics/canonical.js";
-import { STANDARD_POINT_ATTRS } from "../data/index.js";
 import { deriveGeometry } from "../data/derive.js";
-import { isField } from "../fields/index.js";
 import { makeGeometryItem } from "../graph/index.js";
-import { type FitWord, fitGlossary, fitRefusal } from "./boxFit.js";
-import { BOX_FRAMES, FACE_AXIS_NAMES, type FaceFrameColumns, decodeFaceFrame, readFaceFrame } from "./faceFrame.js";
-import { BOX_SNAP_MODES, SNAP_TO, ULP_TOL, decodeBoxSnap, f32Ulp, snapBoxAxis } from "./latticeSnap.js";
+import { requireBoxColumns, resolveWhere } from "./boxCells.js";
+import { type FitWord, decodeFit, fitGlossary } from "./boxFit.js";
+import { BOX_FRAMES, FACE_AXIS_NAMES, type FaceFrameColumns, decodeBoxFrame, decodeFaceFrame, readFaceFrame } from "./faceFrame.js";
+import { BOX_SNAP_MODES, SNAP_TO, coordTol, decodeBoxSnap, requireSnapSteps, snapBoxAxis } from "./latticeSnap.js";
 import type {
   PlaceBoxInputs,
   PlaceBoxOutputs,
@@ -57,10 +56,10 @@ import { standardNode } from "./registry.js";
 import {
   CANCEL_STRIDE,
   readComp,
+  refuseStandardPointName,
   requireFinitePlainParam,
   requireGeometry,
   requireReportSlot,
-  requireScalarColumn,
   requireVec3Column,
   resolveOn,
 } from "./util.js";
@@ -211,13 +210,7 @@ export const placeBox = standardNode<PlaceBoxParams, PlaceBoxInputs, PlaceBoxOut
   execute({ inputs, params, seed, checkCancelled }) {
     // ---- params, decided ONCE: every string is turned into a code here,
     // and no string reaches the per-cell loop.
-    const frameName = canonicalOneOf(BOX_FRAMES, params.frame);
-    if (frameName === undefined) {
-      throw new Error(
-        `${NODE}: param "frame" is ${JSON.stringify(params.frame)}; valid: ${BOX_FRAMES.join(", ")} — "face" is the frame shellSplit writes (along, up, out), read from alongAxisAttr, alongSignAttr and outwardAttr.`,
-      );
-    }
-    const local = frameName === "face";
+    const local = decodeBoxFrame(NODE, params.frame);
     const compNames: readonly string[] = local ? FACE_AXIS_NAMES : AXIS_NAMES;
 
     const unitCodes = (param: "units" | "offsetUnits", allowed: readonly string[], fix: string): Uint8Array => {
@@ -243,25 +236,11 @@ export const placeBox = standardNode<PlaceBoxParams, PlaceBoxInputs, PlaceBoxOut
     const sizeUnit = unitCodes("units", UNITS, '["absolute"] or ["relative", "absolute", "relative"]');
     const offUnit = unitCodes("offsetUnits", OFFSET_UNITS, '["absolute"] or ["absolute", "self", "absolute"]');
 
-    const fitName = canonicalOneOf(FITS, params.fit);
-    if (fitName === undefined) {
-      throw new Error(
-        fitRefusal(NODE, params.fit, FITS, {
-          scale: 'a placed box has a size of its own and nothing to rescale it against; bound the size instead, e.g. min(<size>, box("sx")), or use "clamp" or "clip"',
-        }),
-      );
-    }
-    const fit = (FITS as readonly string[]).indexOf(fitName);
+    const fit = decodeFit(NODE, params.fit, FITS, {
+      scale: 'a placed box has a size of its own and nothing to rescale it against; bound the size instead, e.g. min(<size>, box("sx")), or use "clamp" or "clip"',
+    });
     const snapRule = decodeBoxSnap(NODE, params.snapMode, params.snapTo);
-    const snap = params.snap;
-    for (let a = 0; a < 3; a++) {
-      const v = snap[a];
-      if (typeof v !== "number" || !Number.isFinite(v) || v < 0) {
-        throw new Error(
-          `${NODE}: param "snap" component ${a} (${AXIS_NAMES[a]}) is ${typeof v === "number" ? String(v) : JSON.stringify(v)}; a lattice step is a finite number >= 0, and 0 means no snapping on that axis.`,
-        );
-      }
-    }
+    const snap = requireSnapSteps(NODE, params.snap);
     requireFinitePlainParam(params.size, NODE, "size", "A size is a finite number per axis (a negative one counts as 0). Write a plain [a, b, c], or bound the expression.");
     requireFinitePlainParam(params.anchor, NODE, "anchor", "An anchor is a fraction per axis: 0 the min side, 0.5 the centre, 1 the max side.");
     requireFinitePlainParam(params.offset, NODE, "offset", "An offset is a finite number per axis.");
@@ -271,43 +250,24 @@ export const placeBox = standardNode<PlaceBoxParams, PlaceBoxInputs, PlaceBoxOut
     }
 
     const labelName = params.labelAttr;
-    if (labelName !== "" && STANDARD_POINT_ATTRS.some((std) => std.name === labelName)) {
-      throw new Error(
-        `${NODE}: param "labelAttr" cannot write "${labelName}" — it is a standard point attribute (${STANDARD_POINT_ATTRS.map((std) => std.name).join(", ")}), whose meaning every other node relies on. Name an attribute of your own instead (e.g. "piece").`,
-      );
-    }
+    refuseStandardPointName(NODE, "labelAttr", labelName, "piece");
 
     // ---- geometry
     const src = requireGeometry(inputs, "in", NODE);
     const srcSet = src.attrs.point;
     const n = srcSet.count;
-    const loAttr = srcSet.get("boundsMin");
-    const hiAttr = srcSet.get("boundsMax");
-    for (const [name, attr] of [
-      ["boundsMin", loAttr],
-      ["boundsMax", hiAttr],
-    ] as const) {
-      if (attr === undefined || attr.type !== "f32" || attr.tupleSize !== 3) {
-        throw new Error(
-          `${NODE}: the input on pin "in" ${attr === undefined ? `has no "${name}" point attribute` : `has "${name}" as ${attr.type} tupleSize ${attr.tupleSize}`}; a cell's box is the standard f32 tuple-3 pair boundsMin/boundsMax, and the box is placed inside it. Give the cells their boxes with setBounds first.`,
-        );
-      }
-    }
-    const lo = loAttr!.data as Float32Array;
-    const hi = hiAttr!.data as Float32Array;
+    const { lo, hi } = requireBoxColumns(
+      NODE,
+      srcSet,
+      "in",
+      "a cell's box is the standard f32 tuple-3 pair boundsMin/boundsMax, and the box is placed inside it. Give the cells their boxes with setBounds first.",
+    );
     if (labelName !== "") {
       requireReportSlot({ attrs: srcSet, nodeType: NODE, param: "labelAttr", name: labelName, type: "string", tupleSize: 1, domain: "point", suggestion: "placedLabel" });
     }
 
     // ---- per-cell values, resolved on the CELLS
-    let whereCol: ArrayLike<number> | undefined;
-    let whereAll = true;
-    if (isField(params.where)) {
-      whereCol = requireScalarColumn(resolveOn(src, "point", params.where, seed, NODE, "where"), NODE, "where", "cell", "a place-or-pass-through flag").data;
-    } else {
-      whereAll = (params.where as number) !== 0;
-    }
-    const places = (i: number): boolean => (whereCol === undefined ? whereAll : whereCol[i] !== 0);
+    const places = resolveWhere(src, params.where, seed, NODE, "a place-or-pass-through flag");
     const vecParam = (param: "size" | "anchor" | "offset", what: string) => {
       const col = resolveOn(src, "point", params[param], seed, NODE, param);
       return requireVec3Column(col, NODE, param, "cell", what);
@@ -317,9 +277,7 @@ export const placeBox = standardNode<PlaceBoxParams, PlaceBoxInputs, PlaceBoxOut
     const offsetCol = vecParam("offset", "an offset per axis of the frame");
 
     // The frame columns, looked up once by name (never per cell).
-    const frameCols: FaceFrameColumns | undefined = local
-      ? readFaceFrame(NODE, srcSet, { alongAxisAttr: params.alongAxisAttr, alongSignAttr: params.alongSignAttr, outwardAttr: params.outwardAttr })
-      : undefined;
+    const frameCols: FaceFrameColumns | undefined = local ? readFaceFrame(NODE, srcSet, params) : undefined;
 
     // ---- the output: the input's points, topology and every attribute,
     // shared until written; only the two corners (and the label) change.
@@ -379,11 +337,7 @@ export const placeBox = standardNode<PlaceBoxParams, PlaceBoxInputs, PlaceBoxOut
           snapBoxAxis(bLo, bHi, snap[w], snapRule, snapped);
           bLo = snapped[0];
           bHi = snapped[1];
-          if (bHi < bLo) {
-            const m = centre;
-            bLo = m;
-            bHi = m;
-          }
+          if (bHi < bLo) bLo = bHi = centre;
         } else {
           // Flush to f32 precision IS flush: a corner within two f32 ulps
           // at the cell's coordinates of one of its planes goes onto the
@@ -394,7 +348,7 @@ export const placeBox = standardNode<PlaceBoxParams, PlaceBoxInputs, PlaceBoxOut
           // or one set against a thin cell, is not pulled onto a plane it
           // is not at. A box of no volume has no size to protect: both
           // corners move together, so it gets the plain tolerance.
-          const ulpTol = ULP_TOL * f32Ulp(Math.max(Math.abs(cLo), Math.abs(cHi)));
+          const ulpTol = coordTol(cLo, cHi);
           const tol = bHi > bLo ? Math.min(ulpTol, (bHi - bLo) / 4) : ulpTol;
           bLo = flush(bLo, cLo, cHi, tol);
           bHi = flush(bHi, cLo, cHi, tol);

@@ -57,7 +57,6 @@
  */
 import { canonicalOneOf } from "../diagnostics/canonical.js";
 import { suggestNames } from "../diagnostics/didYouMean.js";
-import { STANDARD_POINT_ATTRS } from "../data/index.js";
 import { isField } from "../fields/index.js";
 import { makeGeometryItem } from "../graph/index.js";
 import { hashFinalize, hashMix, hashSeed } from "../random/hash.js";
@@ -66,17 +65,30 @@ import type {
   ShellSplitOutputs,
   ShellSplitParams,
 } from "./params.generated.js";
-import { fitGlossary, fitRefusal } from "./boxFit.js";
-import { ULP_TOL, f32HalfUlp, f32Ulp } from "./latticeSnap.js";
+import { requireBoxColumns, requireCellBoxAxis, resolveWhere } from "./boxCells.js";
+import { decodeFit, fitGlossary } from "./boxFit.js";
+import {
+  FACE_ALONG,
+  FACE_ALONG_SIGN,
+  FACE_INTERIOR,
+  FACE_NAMES,
+  FACE_OUT,
+  FACE_OUTWARD,
+  FACE_UP,
+  FACE_UP_SIGN,
+  faceCodeOf,
+} from "./faceFrame.js";
+import { coordTol, sumTol } from "./latticeSnap.js";
 import { standardNode } from "./registry.js";
 import {
   CANCEL_STRIDE,
   copyElements,
   gatherPoints,
+  pieceColumnClash,
+  refuseStandardPointName,
   requireFinitePlainParam,
   requireGeometry,
   requireReportSlot,
-  requireScalarColumn,
   resolveOn,
 } from "./util.js";
 
@@ -85,10 +97,13 @@ export type { ShellSplitParams } from "./params.generated.js";
 
 const NODE = "shellSplit";
 
-/** The six shell faces, in face-code order: the code IS the index here. */
-const FACES = ["floor", "south", "north", "west", "east", "ceiling"] as const;
+/**
+ * The six shell faces, in face-code order: the code IS the index here, and
+ * each code's frame is faceFrame.ts' face table, the one statement of it.
+ */
+const FACES = FACE_NAMES;
 /** The interior's face code, after the six shell faces. */
-const INTERIOR = 6;
+const INTERIOR = FACE_INTERIOR;
 const FITS = ["error", "clip", "scale"] as const;
 const AXIS_NAMES = ["x", "y", "z"] as const;
 
@@ -96,28 +111,8 @@ const AXIS_NAMES = ["x", "y", "z"] as const;
 const FIT_ERROR = 0;
 const FIT_CLIP = 1;
 
-/**
- * Per face code: the along, up and out axes (0 = x, 1 = y, 2 = z), the
- * signs of along and up, and the outward normal, chosen so that
- * (ALONG_SIGN * e[ALONG]) x (UP_SIGN * e[UP]) = OUTWARD on every face —
- * the test file checks that cross product. The interior faces nowhere: its
- * frame is the world's (along +x, up +y, out z) and its outward normal is
- * zero.
- */
-const ALONG = [0, 0, 0, 2, 2, 0, 0] as const;
-const ALONG_SIGN = [1, -1, 1, 1, -1, 1, 1] as const;
-const UP = [2, 1, 1, 1, 1, 2, 1] as const;
-const UP_SIGN = [1, 1, 1, 1, 1, -1, 1] as const;
-const OUT = [1, 2, 2, 0, 0, 1, 2] as const;
-const OUTWARD: readonly (readonly [number, number, number])[] = [
-  [0, -1, 0],
-  [0, 0, -1],
-  [0, 0, 1],
-  [-1, 0, 0],
-  [1, 0, 0],
-  [0, 1, 0],
-  [0, 0, 0],
-];
+/** A cell box this node cannot split, in its words. */
+const BOX_TAIL = 'so it has no shell to cut. Fix the setBounds that made it, or pass the cell through with "where".';
 
 /**
  * The seed of face code `k` of a cell: `hashCombine(cellSeed, k)`, spelled
@@ -282,16 +277,10 @@ export const shellSplit = standardNode<ShellSplitParams, ShellSplitInputs, Shell
     }
     const withInterior = interiorLabel !== "";
 
-    const fitName = canonicalOneOf(FITS, params.fit);
-    if (fitName === undefined) {
-      throw new Error(
-        fitRefusal(NODE, params.fit, FITS, {
-          allow: "two faces thicker than their span would overlap, and overlapping pieces do not tile the box",
-          clamp: "a face has no box of its own to slide; \"clip\" cuts the later face where it meets the earlier one",
-        }),
-      );
-    }
-    const fit = (FITS as readonly string[]).indexOf(fitName);
+    const fit = decodeFit(NODE, params.fit, FITS, {
+      allow: "two faces thicker than their span would overlap, and overlapping pieces do not tile the box",
+      clamp: "a face has no box of its own to slide; \"clip\" cuts the later face where it meets the earlier one",
+    });
 
     requireFinitePlainParam(
       params.thickness,
@@ -329,32 +318,13 @@ export const shellSplit = standardNode<ShellSplitParams, ShellSplitInputs, Shell
         }
       }
     }
-    for (const [param, name, , , suggestion] of slots) {
-      if (STANDARD_POINT_ATTRS.some((std) => std.name === name)) {
-        throw new Error(
-          `${NODE}: param "${param}" cannot write "${name}" — it is a standard point attribute (${STANDARD_POINT_ATTRS.map((std) => std.name).join(", ")}), ${name === "seed" ? "and this node writes a fresh seed on every piece, so the two would fight over one column" : name === "boundsMin" || name === "boundsMax" ? "and this node writes every piece's box there" : "whose meaning every other node relies on"}. Name an attribute of your own instead (e.g. "${suggestion}").`,
-        );
-      }
-    }
+    for (const [param, name, , , suggestion] of slots) refuseStandardPointName(NODE, param, name, suggestion, pieceColumnClash(name));
 
     // ---- geometry
     const src = requireGeometry(inputs, "in", NODE);
     const srcSet = src.attrs.point;
     const n = srcSet.count;
-    const loAttr = srcSet.get("boundsMin");
-    const hiAttr = srcSet.get("boundsMax");
-    for (const [name, attr] of [
-      ["boundsMin", loAttr],
-      ["boundsMax", hiAttr],
-    ] as const) {
-      if (attr === undefined || attr.type !== "f32" || attr.tupleSize !== 3) {
-        throw new Error(
-          `${NODE}: the input on pin "in" ${attr === undefined ? `has no "${name}" point attribute` : `has "${name}" as ${attr.type} tupleSize ${attr.tupleSize}`}; a cell's box is the standard f32 tuple-3 pair boundsMin/boundsMax. Give the cells their boxes with setBounds first.`,
-        );
-      }
-    }
-    const lo = loAttr!.data as Float32Array;
-    const hi = hiAttr!.data as Float32Array;
+    const { lo, hi } = requireBoxColumns(NODE, srcSet, "in");
     const seedAttr = srcSet.get("seed");
     if (seedAttr && (seedAttr.type !== "u32" || seedAttr.tupleSize !== 1)) {
       throw new Error(
@@ -375,14 +345,7 @@ export const shellSplit = standardNode<ShellSplitParams, ShellSplitInputs, Shell
       );
     }
     const thick = thickCol.data;
-    let whereCol: ArrayLike<number> | undefined;
-    let whereAll = true;
-    if (isField(params.where)) {
-      whereCol = requireScalarColumn(resolveOn(src, "point", params.where, seed, NODE, "where"), NODE, "where", "cell", "a split-or-pass-through flag").data;
-    } else {
-      whereAll = (params.where as number) !== 0;
-    }
-    const splits = (i: number): boolean => (whereCol === undefined ? whereAll : whereCol[i] !== 0);
+    const splits = resolveWhere(src, params.where, seed, NODE, "a split-or-pass-through flag");
 
     /** A face code's thickness at cell i: 0 when the face is not listed, never negative. */
     const thicknessOf = (i: number, k: number): number => {
@@ -395,41 +358,27 @@ export const shellSplit = standardNode<ShellSplitParams, ShellSplitInputs, Shell
     // reused scratch. cut[a*2] is the min-side face's inner plane, cut[a*2+1]
     // the max-side face's, along axis a.
     const cut = new Float64Array(6);
-    /** Min-side and max-side face codes per axis: x west/east, y floor/ceiling, z south/north. */
-    const MIN_FACE = [3, 0, 1] as const;
-    const MAX_FACE = [4, 5, 2] as const;
     const box = new Float64Array(6); // [x0, y0, z0, x1, y1, z1] of one piece
 
     const layoutCell = (i: number): void => {
       for (let a = 0; a < 3; a++) {
         const c0 = lo[i * 3 + a];
         const c1 = hi[i * 3 + a];
-        if (!Number.isFinite(c0) || !Number.isFinite(c1)) {
-          throw new Error(
-            `${NODE}: cell ${i}'s box is not finite along ${AXIS_NAMES[a]} — boundsMin ${c0}, boundsMax ${c1} — so it has no shell to cut. Fix the setBounds that made it, or pass the cell through with "where".`,
-          );
-        }
+        requireCellBoxAxis(NODE, i, a, c0, c1, BOX_TAIL);
         const len = c1 - c0;
-        if (!(len >= 0)) {
-          throw new Error(
-            `${NODE}: cell ${i}'s box is inside out along ${AXIS_NAMES[a]} — boundsMin ${c0} is above boundsMax ${c1} — so it has no shell to cut. Fix the setBounds that made it, or pass the cell through with "where".`,
-          );
-        }
-        const kMin = MIN_FACE[a];
-        const kMax = MAX_FACE[a];
+        const kMin = faceCodeOf(a, -1);
+        const kMax = faceCodeOf(a, 1);
         let tMin = thicknessOf(i, kMin);
         let tMax = thicknessOf(i, kMax);
         const sum = tMin + tMax;
-        // "To f32 precision" is splitBox's: the ULP_TOL ulps AT THE BOX's
-        // coordinates that placeBox and offsetBox hold a face to (far from
-        // the origin a stored span is only known to a few ulps of where it
-        // sits), plus half an ulp of each thickness summed against it,
-        // since a sum errs more than one coordinate. Not a share of
-        // the span: a millionth of a 1000-wide box let two faces 8 ulps
-        // too thick pass as an exact fill.
-        const eps = ULP_TOL * f32Ulp(Math.max(Math.abs(c0), Math.abs(c1)));
-        const tol = eps + f32HalfUlp(tMin) + f32HalfUlp(tMax);
-        if (sum > len + tol) {
+        // "To f32 precision" is splitBox's: the box's own coordinate
+        // tolerance plus half an ulp of each thickness summed against it
+        // (sumTol). Not a share of the span: a millionth of a 1000-wide box
+        // let two faces 8 ulps too thick pass as an exact fill. Only a sum
+        // past the span itself can be past the tolerance, so it is only
+        // worked out then.
+        const eps = coordTol(c0, c1);
+        if (sum > len && sum > len + sumTol(c0, c1, tMin, tMax)) {
           if (fit === FIT_ERROR && (tMin === 0 || tMax === 0)) {
             // One face alone is thicker than the span: there is no pair.
             const k = tMin === 0 ? kMax : kMin;
@@ -602,13 +551,13 @@ export const shellSplit = standardNode<ShellSplitParams, ShellSplitInputs, Shell
       oSeed[w] = faceSeed(h1, k);
       if (oLabel) oLabel[w] = label;
       if (oFace) oFace[w] = k;
-      if (oAlong) oAlong[w] = ALONG[k];
-      if (oAlongSign) oAlongSign[w] = ALONG_SIGN[k];
-      if (oUp) oUp[w] = UP[k];
-      if (oUpSign) oUpSign[w] = UP_SIGN[k];
-      if (oOutAxis) oOutAxis[w] = OUT[k];
+      if (oAlong) oAlong[w] = FACE_ALONG[k];
+      if (oAlongSign) oAlongSign[w] = FACE_ALONG_SIGN[k];
+      if (oUp) oUp[w] = FACE_UP[k];
+      if (oUpSign) oUpSign[w] = FACE_UP_SIGN[k];
+      if (oOutAxis) oOutAxis[w] = FACE_OUT[k];
       if (oOutward) {
-        const v = OUTWARD[k];
+        const v = FACE_OUTWARD[k];
         oOutward[w * 3] = v[0];
         oOutward[w * 3 + 1] = v[1];
         oOutward[w * 3 + 2] = v[2];

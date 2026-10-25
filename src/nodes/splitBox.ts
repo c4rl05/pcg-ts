@@ -25,7 +25,6 @@
  * enters a child's seed.
  */
 import { canonicalOneOf } from "../diagnostics/canonical.js";
-import { STANDARD_POINT_ATTRS } from "../data/index.js";
 import { isField } from "../fields/index.js";
 import { makeGeometryItem } from "../graph/index.js";
 import { hashFinalize, hashMix, hashSeed } from "../random/hash.js";
@@ -34,13 +33,25 @@ import type {
   SplitBoxOutputs,
   SplitBoxParams,
 } from "./params.generated.js";
-import { fitGlossary, fitRefusal } from "./boxFit.js";
-import { type RoundCode, ULP_TOL, f32HalfUlp, f32Ulp, refuseCutSnapMode, roundBy, snapToLattice } from "./latticeSnap.js";
+import { requireBoxColumns, requireCellBoxAxis, resolveWhere } from "./boxCells.js";
+import { decodeFit, fitGlossary } from "./boxFit.js";
+import {
+  type RoundCode,
+  coordTol,
+  f32HalfUlp,
+  refuseCutSnapMode,
+  requireSnapSteps,
+  roundBy,
+  snapToLattice,
+  spanErr,
+} from "./latticeSnap.js";
 import { standardNode } from "./registry.js";
 import {
   CANCEL_STRIDE,
   copyElements,
   gatherPoints,
+  pieceColumnClash,
+  refuseStandardPointName,
   requireFinitePlainParam,
   requireGeometry,
   requireReportSlot,
@@ -64,12 +75,13 @@ const NODE = "splitBox";
 const MAX_SPLIT_POINTS = 1 << 22;
 
 /**
- * A cell's sizes refused by `fit` "error" along the axis being laid out
- * (OVERFLOWS, UNDERFILLED): the one refusal that depends on the axis, so
- * the only one axis "longest" may swallow while it tries a fallback axis.
- * An Error like any other to everything outside this file.
+ * What a cell's layout returns when `fit` "error" refuses its sizes along
+ * the axis being laid out (OVERFLOWS, UNDERFILLED), the message left for
+ * the caller to throw: the one refusal that depends on the axis, so the
+ * only one axis "longest" may pass over while it tries a fallback axis.
+ * Every other refusal is thrown where it is found.
  */
-class CellRefusal extends Error {}
+const REFUSED = -1;
 
 const AXES = ["x", "y", "z", "perCell", "longest"] as const;
 /** The candidate sets `axis` "longest" may choose from, as axis-index lists. */
@@ -94,6 +106,15 @@ const FIT_ERROR = 0;
 const FIT_CLIP = 1;
 const FIT_SCALE = 2;
 
+/** A cell box this node cannot cut, in its words: along the cut axis, and along a candidate of axis "longest". */
+const CUT_BOX_TAIL = 'so it has no length to cut. Fix the setBounds that made it, or pass the cell through with "where".';
+const LONGEST_BOX_TAIL =
+  'so axis "longest" has no longest span to cut it across. Fix the setBounds that made it, or pass the cell through with "where".';
+
+/** longestOrderOf's scratch, by axis: a cell's stored span and that span's storage error ({@link spanErr}). */
+const SPAN = new Float64Array(3);
+const SPAN_ERR = new Float64Array(3);
+
 /**
  * The seed of slot `k` of a cell: `hashCombine(cellSeed, k)`, spelled out
  * as repeatPoints spells it so the inner loop does not allocate the
@@ -113,7 +134,8 @@ function slotSeed(h1: number, k: number): number {
  *
  * A tie is what f32 storage cannot resolve. A stored span is off its
  * intended length by at most half an f32 step at each of its two corners —
- * its own `err` — so the intended length lies in [span - err, span + err].
+ * its own `err` ({@link spanErr}) — so the intended length lies in
+ * [span - err, span + err].
  * An axis is a CANDIDATE when it COULD be the longest: its span + err
  * reaches the largest span - err over EVERY other axis of the set, so no
  * candidate is shorter than any other axis by more than the two spans'
@@ -141,28 +163,20 @@ function slotSeed(h1: number, k: number): number {
  * short side does not, so the half step stands.
  */
 function longestOrderOf(i: number, axes: readonly number[], lo: Float32Array, hi: Float32Array, out: Uint8Array, at: number): number {
+  // Each candidate's span and error, once.
   for (const a of axes) {
     const l = lo[i * 3 + a];
     const h = hi[i * 3 + a];
-    if (!Number.isFinite(l) || !Number.isFinite(h)) {
-      throw new Error(
-        `${NODE}: cell ${i}'s box is not finite along ${AXIS_NAMES[a]} — boundsMin ${l}, boundsMax ${h} — so axis "longest" has no longest span to cut it across. Fix the setBounds that made it, or pass the cell through with "where".`,
-      );
-    }
-    if (!(h >= l)) {
-      throw new Error(
-        `${NODE}: cell ${i}'s box is inside out along ${AXIS_NAMES[a]} — boundsMin ${l} is above boundsMax ${h} — so axis "longest" has no longest span to cut it across. Fix the setBounds that made it, or pass the cell through with "where".`,
-      );
-    }
+    requireCellBoxAxis(NODE, i, a, l, h, LONGEST_BOX_TAIL);
+    SPAN[a] = h - l;
+    SPAN_ERR[a] = spanErr(l, h);
   }
-  const span = (a: number): number => hi[i * 3 + a] - lo[i * 3 + a];
-  const err = (a: number): number => f32HalfUlp(lo[i * 3 + a]) + f32HalfUlp(hi[i * 3 + a]);
   // The longest stored span always qualifies, so the loop always sets it.
   let first = axes[0];
   for (const a of axes) {
     let rival = -Infinity;
-    for (const b of axes) if (b !== a) rival = Math.max(rival, span(b) - err(b));
-    if (span(a) + err(a) >= rival) {
+    for (const b of axes) if (b !== a) rival = Math.max(rival, SPAN[b] - SPAN_ERR[b]);
+    if (SPAN[a] + SPAN_ERR[a] >= rival) {
       first = a;
       break;
     }
@@ -173,9 +187,8 @@ function longestOrderOf(i: number, axes: readonly number[], lo: Float32Array, hi
   // exact ties). At most two of them.
   for (const a of axes) {
     if (a === first) continue;
-    const span = hi[i * 3 + a] - lo[i * 3 + a];
     let k = at + len;
-    while (k > at + 1 && hi[i * 3 + out[k - 1]] - lo[i * 3 + out[k - 1]] < span) {
+    while (k > at + 1 && SPAN[out[k - 1]] < SPAN[a]) {
       out[k] = out[k - 1];
       k--;
     }
@@ -390,25 +403,11 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
       throw new Error(refuseCutSnapMode(NODE, "snapMode", params.snapMode) ?? `${NODE}: param "snapMode" is ${JSON.stringify(params.snapMode)}; valid: ${ROUNDS.join(", ")}.`);
     }
     const snapMode = (ROUNDS as readonly string[]).indexOf(snapName) as RoundCode;
-    const fitName = canonicalOneOf(FITS, params.fit);
-    if (fitName === undefined) {
-      throw new Error(
-        fitRefusal(NODE, params.fit, FITS, {
-          allow: "pieces that do not fill their box, or overrun it, would not tile it; \"clip\" leaves the rest uncovered or cuts the overrun, \"scale\" stretches or shrinks them to fit",
-          clamp: "a cut has no box of its own to slide; \"clip\" cuts at the box's end",
-        }),
-      );
-    }
-    const fit = (FITS as readonly string[]).indexOf(fitName);
-    const snap = params.snap;
-    for (let a = 0; a < 3; a++) {
-      const v = snap[a];
-      if (typeof v !== "number" || !Number.isFinite(v) || v < 0) {
-        throw new Error(
-          `${NODE}: param "snap" component ${a} (${AXIS_NAMES[a]}) is ${typeof v === "number" ? String(v) : JSON.stringify(v)}; a lattice step is a finite number >= 0, and 0 means no snapping on that axis.`,
-        );
-      }
-    }
+    const fit = decodeFit(NODE, params.fit, FITS, {
+      allow: "pieces that do not fill their box, or overrun it, would not tile it; \"clip\" leaves the rest uncovered or cuts the overrun, \"scale\" stretches or shrinks them to fit",
+      clamp: "a cut has no box of its own to slide; \"clip\" cuts at the box's end",
+    });
+    const snap = requireSnapSteps(NODE, params.snap);
 
     requireFinitePlainParam(
       params.sizes,
@@ -447,31 +446,15 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
       }
     }
     for (const [param, name] of slotsNamed) {
-      if (STANDARD_POINT_ATTRS.some((std) => std.name === name)) {
-        throw new Error(
-          `${NODE}: param "${param}" cannot write "${name}" — it is a standard point attribute (${STANDARD_POINT_ATTRS.map((std) => std.name).join(", ")}), ${name === "seed" ? "and this node writes a fresh seed on every piece, so the two would fight over one column" : name === "boundsMin" || name === "boundsMax" ? "and this node writes every piece's box there" : "whose meaning every other node relies on"}. Name an attribute of your own instead (e.g. "${param === "labelAttr" ? "piece" : param === "indexAttr" ? "pieceIndex" : "pieceCount"}").`,
-        );
-      }
+      const suggestion = param === "labelAttr" ? "piece" : param === "indexAttr" ? "pieceIndex" : "pieceCount";
+      refuseStandardPointName(NODE, param, name, suggestion, pieceColumnClash(name));
     }
 
     // ---- geometry
     const src = requireGeometry(inputs, "in", NODE);
     const srcSet = src.attrs.point;
     const n = srcSet.count;
-    const loAttr = srcSet.get("boundsMin");
-    const hiAttr = srcSet.get("boundsMax");
-    for (const [name, attr] of [
-      ["boundsMin", loAttr],
-      ["boundsMax", hiAttr],
-    ] as const) {
-      if (attr === undefined || attr.type !== "f32" || attr.tupleSize !== 3) {
-        throw new Error(
-          `${NODE}: the input on pin "in" ${attr === undefined ? `has no "${name}" point attribute` : `has "${name}" as ${attr.type} tupleSize ${attr.tupleSize}`}; a cell's box is the standard f32 tuple-3 pair boundsMin/boundsMax. Give the cells their boxes with setBounds first.`,
-        );
-      }
-    }
-    const lo = loAttr!.data as Float32Array;
-    const hi = hiAttr!.data as Float32Array;
+    const { lo, hi } = requireBoxColumns(NODE, srcSet, "in");
     const seedAttr = srcSet.get("seed");
     if (seedAttr && (seedAttr.type !== "u32" || seedAttr.tupleSize !== 1)) {
       throw new Error(
@@ -498,14 +481,7 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
       );
     }
     const sizes = sizeCol.data;
-    let whereCol: ArrayLike<number> | undefined;
-    let whereAll = true;
-    if (isField(params.where)) {
-      whereCol = requireScalarColumn(resolveOn(src, "point", params.where, seed, NODE, "where"), NODE, "where", "cell", "a split-or-pass-through flag").data;
-    } else {
-      whereAll = (params.where as number) !== 0;
-    }
-    const splits = (i: number): boolean => (whereCol === undefined ? whereAll : whereCol[i] !== 0);
+    const splits = resolveWhere(src, params.where, seed, NODE, "a split-or-pass-through flag");
     let axisCol: ArrayLike<number> | undefined;
     if (fixedAxis < 0 && !byLongest) {
       axisCol = requireScalarColumn(resolveOn(src, "point", params.axisIndex, seed, NODE, "axisIndex"), NODE, "axisIndex", "cell", "an axis index").data;
@@ -513,10 +489,10 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
     const axisOf = new Uint8Array(n);
     // "longest": each cut cell's candidates in preference order, three
     // slots a cell; the choice among them is made in pass 1, by layout.
-    const longOrder = byLongest ? new Uint8Array(n * 3) : undefined;
-    const longCount = byLongest ? new Uint8Array(n) : undefined;
+    const longOrder = new Uint8Array(byLongest ? n * 3 : 0);
+    const longCount = new Uint8Array(byLongest ? n : 0);
     for (let i = 0; i < n; i++) {
-      if (longOrder !== undefined && longCount !== undefined) {
+      if (byLongest) {
         // Only the cells that are cut: a pass-through cell's box is not read.
         if (splits(i)) {
           longCount[i] = longestOrderOf(i, longestAxes, lo, hi, longOrder, i * 3);
@@ -559,35 +535,30 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
       L.segOf = new Int32Array(c);
     };
 
+    /** The message of the last layout that returned REFUSED. */
+    let refusal = "";
+
     /**
-     * Fill `L` with cell i's slots and return its EMITTED piece count. The
-     * ends are final positions along the axis: snapped, clamped, monotone.
+     * Fill `L` with cell i's slots and return its EMITTED piece count, or
+     * REFUSED with the message in `refusal`. The ends are final positions
+     * along the axis: snapped, clamped, monotone.
      */
     const layoutCell = (i: number, runningTotal: number): number => {
       const a = axisOf[i];
       const cLo = lo[i * 3 + a];
       const cHi = hi[i * 3 + a];
       const len = cHi - cLo;
-      if (!Number.isFinite(cLo) || !Number.isFinite(cHi)) {
-        throw new Error(
-          `${NODE}: cell ${i}'s box is not finite along ${AXIS_NAMES[a]} — boundsMin ${cLo}, boundsMax ${cHi} — so it has no length to cut. Fix the setBounds that made it, or pass the cell through with "where".`,
-        );
-      }
-      if (!(len >= 0)) {
-        throw new Error(
-          `${NODE}: cell ${i}'s box is inside out along ${AXIS_NAMES[a]} — boundsMin ${cLo} is above boundsMax ${cHi} — so it has no length to cut. Fix the setBounds that made it, or pass the cell through with "where".`,
-        );
-      }
+      requireCellBoxAxis(NODE, i, a, cLo, cHi, CUT_BOX_TAIL);
       let absSum = 0;
       let relSum = 0;
-      // "Exactly fills" is to f32 precision: the ULP_TOL ulps at the box's
-      // coordinates that placeBox and offsetBox hold a single face to
-      // (where the box itself is known to), plus half an ulp of every
-      // absolute size summed against it (where each size is known to: a sum
-      // of several sizes errs more than one coordinate; see f32HalfUlp for
-      // the box whose seven equal sizes miss it by 2.5 coordinate ulps).
+      // "Exactly fills" is to f32 precision: the coordinate tolerance that
+      // placeBox and offsetBox hold a single face to (coordTol: where the
+      // box itself is known to), plus half an ulp of every absolute size
+      // summed against it (where each size is known to: a sum of several
+      // sizes errs more than one coordinate; see f32HalfUlp for the box
+      // whose seven equal sizes miss it by 2.5 coordinate ulps).
       // [0.1, 0.2, 0.7] on a box of 1 is a fill, not an underfill of 7.5e-9.
-      let tol = ULP_TOL * f32Ulp(Math.max(Math.abs(cLo), Math.abs(cHi)));
+      let tol = coordTol(cLo, cHi);
       for (let j = 0; j < N; j++) {
         const s = Math.max(0, sizeAt(i, j));
         if (unit[j] === ABS) {
@@ -610,9 +581,8 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
               break;
             }
           }
-          throw new CellRefusal(
-            `${NODE}: cell ${i} OVERFLOWS — its absolute segments need ${absSum} along ${AXIS_NAMES[a]} but its box is ${len} long (${cLo} to ${cHi}); segment ${at} ("${labels[at]}", size ${Math.max(0, sizeAt(i, at))}) is where the running total passed the box, at ${run}. Set "fit" to "clip" (cut the pieces at the box's end) or "scale" (shrink them to fit), or bound the sizes, e.g. min(<size>, <the box length>).`,
-          );
+          refusal = `${NODE}: cell ${i} OVERFLOWS — its absolute segments need ${absSum} along ${AXIS_NAMES[a]} but its box is ${len} long (${cLo} to ${cHi}); segment ${at} ("${labels[at]}", size ${Math.max(0, sizeAt(i, at))}) is where the running total passed the box, at ${run}. Set "fit" to "clip" (cut the pieces at the box's end) or "scale" (shrink them to fit), or bound the sizes, e.g. min(<size>, <the box length>).`;
+          return REFUSED;
         }
         if (fit === FIT_CLIP) clipAbs = true;
         else absScale = absSum > 0 ? len / absSum : 0;
@@ -637,9 +607,8 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
           const why = anyRel
             ? `its "relative" segments all have weight 0 here, so nothing takes the remaining ${rest}`
             : `no "relative" or "repeat" segment is there to take the remaining ${rest}`;
-          throw new CellRefusal(
-            `${NODE}: cell ${i} is UNDERFILLED — its segments cover ${absSum} of a box ${len} long along ${AXIS_NAMES[a]} (${cLo} to ${cHi}), and ${why}. Add a segment that takes the rest (unit "relative", size 1 — label it "" to leave it empty as a gap), or set "fit" to "clip" (leave it uncovered) or "scale" (stretch the pieces to fill).`,
-          );
+          refusal = `${NODE}: cell ${i} is UNDERFILLED — its segments cover ${absSum} of a box ${len} long along ${AXIS_NAMES[a]} (${cLo} to ${cHi}), and ${why}. Add a segment that takes the rest (unit "relative", size 1 — label it "" to leave it empty as a gap), or set "fit" to "clip" (leave it uncovered) or "scale" (stretch the pieces to fill).`;
+          return REFUSED;
         }
         if (fit === FIT_SCALE) {
           absScale = absSum > 0 ? len / absSum : 0;
@@ -761,29 +730,19 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
      * two long, where it rounds onto a corner — try the other candidates in
      * order (longest first) and take the first that emits 2 or more; if
      * none does, the preferred axis stands. So an ordinary cell costs one
-     * layout. Only the preferred axis can refuse the cell: a fallback whose
-     * sizes the fit refuses along it (a CellRefusal) is not taken. Anything
-     * else a fallback throws — the point cap a repeat runs into along a
-     * longer axis — is the cook's, and propagates. Leaves `axisOf[i]` on
-     * the choice.
+     * layout. Only the preferred axis can refuse the cell (REFUSED, for the
+     * caller to throw): a fallback whose sizes the fit refuses along it is
+     * not taken. Anything a fallback throws — the point cap a repeat runs
+     * into along a longer axis — is the cook's, and propagates. Enters and
+     * leaves `axisOf[i]` on the choice, the preferred axis to begin with.
      */
     const layoutLongest = (i: number, runningTotal: number): number => {
-      const order = longOrder!;
-      const cnt = longCount![i];
-      const preferred = order[i * 3];
-      axisOf[i] = preferred;
+      const preferred = longOrder[i * 3];
       const first = layoutCell(i, runningTotal);
-      if (first >= 2) return first;
-      for (let k = 1; k < cnt; k++) {
-        const a = order[i * 3 + k];
-        axisOf[i] = a;
-        let e: number;
-        try {
-          e = layoutCell(i, runningTotal);
-        } catch (err) {
-          if (!(err instanceof CellRefusal)) throw err;
-          e = -1;
-        }
+      if (first >= 2 || first === REFUSED) return first;
+      for (let k = 1; k < longCount[i]; k++) {
+        axisOf[i] = longOrder[i * 3 + k];
+        const e = layoutCell(i, runningTotal);
         if (e >= 2) return e;
       }
       axisOf[i] = preferred;
@@ -796,7 +755,8 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
     let total = 0;
     for (let i = 0; i < n; i++) {
       if ((i & (CANCEL_STRIDE - 1)) === 0) checkCancelled();
-      const c = !splits(i) ? 1 : longCount !== undefined && longCount[i] > 1 ? layoutLongest(i, total) : layoutCell(i, total);
+      const c = !splits(i) ? 1 : byLongest ? layoutLongest(i, total) : layoutCell(i, total);
+      if (c === REFUSED) throw new Error(refusal);
       if (total + c > MAX_SPLIT_POINTS) {
         throw new Error(
           `${NODE}: the split would emit more than ${MAX_SPLIT_POINTS} points from the input's ${n} cell(s) — cell ${i} emits ${c} piece(s) and the running total reached ${total + c}. The cap is on the TOTAL, so this is the cell the total ran out on rather than necessarily the largest offender. Bound the repeat module or the input.`,
@@ -849,6 +809,7 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
         running++;
         continue;
       }
+      // Laid out along this axis in pass 1 already, so never REFUSED here.
       layoutCell(i, running);
       running += counts[i];
       const a = axisOf[i];

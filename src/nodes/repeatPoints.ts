@@ -16,13 +16,13 @@
  * is not kept, and every point attribute rides along with no list at all.
  */
 import { hashFinalize, hashMix, hashSeed } from "../random/hash.js";
-import { STANDARD_POINT_ATTRS } from "../data/index.js";
 import { makeGeometryItem } from "../graph/index.js";
 import { standardNode } from "./registry.js";
 import {
   CANCEL_STRIDE,
   copyElements,
   gatherPoints,
+  refuseStandardPointName,
   requireFinitePlainParam,
   requireGeometry,
   requireReportSlot,
@@ -148,11 +148,15 @@ export const repeatPoints = standardNode<
       ["indexAttr", indexName],
       ["countAttr", countName],
     ] as const) {
-      if (STANDARD_POINT_ATTRS.some((std) => std.name === name)) {
-        throw new Error(
-          `${NODE}: param "${param}" cannot write "${name}" — it is a standard point attribute (${STANDARD_POINT_ATTRS.map((std) => std.name).join(", ")}), ${name === "seed" ? "and this node writes a fresh seed on every copy, so the two would fight over one column" : "whose meaning every other node relies on, so writing a copy number into it would silently change what that column means downstream"}. Name an attribute of your own instead (e.g. "${param === "indexAttr" ? "copy" : "copyCount"}").`,
-        );
-      }
+      refuseStandardPointName(
+        NODE,
+        param,
+        name,
+        param === "indexAttr" ? "copy" : "copyCount",
+        name === "seed"
+          ? "and this node writes a fresh seed on every copy, so the two would fight over one column"
+          : "whose meaning every other node relies on, so writing a copy number into it would silently change what that column means downstream",
+      );
     }
     // Both slots are checked against the INPUT's columns, which is what the
     // output's point domain is made of: a collision there is a column the

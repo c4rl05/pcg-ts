@@ -33,6 +33,8 @@ import { suggestNames } from "../diagnostics/didYouMean.js";
 import { adoptTopology } from "../data/adoptTopology.js";
 import { type Attribute, Geometry, PRIMTYPE_ATTR, type PrimType } from "../data/index.js";
 import { makeGeometryItem } from "../graph/index.js";
+import { type InsideOutWording, requireBoxColumns, requireCellBoxAxis } from "./boxCells.js";
+import { FACE_ALONG, FACE_ALONG_SIGN, FACE_NAMES, FACE_OUT, FACE_SIDE, FACE_UP_SIGN } from "./faceFrame.js";
 import type {
   BoxesToMeshInputs,
   BoxesToMeshOutputs,
@@ -54,11 +56,12 @@ export type { BoxesToMeshParams } from "./params.generated.js";
 
 const NODE = "boxesToMesh";
 
-/** shellSplit's side names, in its face-code order: the code IS the index. */
-const SIDES = ["floor", "south", "north", "west", "east", "ceiling"] as const;
-/** Per face code: the world axis the face is normal to, and which side of the box. */
-const SIDE_AXIS = [1, 2, 2, 0, 0, 1] as const;
-const SIDE_POSITIVE = [false, false, true, false, true, true] as const;
+/**
+ * shellSplit's side names, in its face-code order: the code IS the index,
+ * into faceFrame.ts' face table — the world axis each side is normal to
+ * (FACE_OUT), which side of the box (FACE_SIDE), and its frame.
+ */
+const SIDES = FACE_NAMES;
 const SIDE_WHERE = ["min y", "min z", "max z", "min x", "max x", "max y"] as const;
 /** meshPrimitive's box order (+x, -x, +y, -y, +z, -z), as shellSplit's names. */
 const DEFAULT_FACES = ["east", "west", "ceiling", "floor", "north", "south"] as const;
@@ -69,14 +72,13 @@ const NOT_CARRIED: ReadonlySet<string> = new Set(["P", "rot", "scale"]);
 
 /** The cap on the output's points, summed over every cell: repeatPoints' and splitBox's. */
 const MAX_MESH_POINTS = 1 << 22;
-/**
- * shellSplit's face frame per face code (along x up = outward): the along
- * and up axes and their signs. uv follows it, u along and v up, so every
- * face reads left to right and bottom to top seen from outside it.
- */
-const ALONG = [0, 0, 0, 2, 2, 0] as const;
-const ALONG_SIGN = [1, -1, 1, 1, -1, 1] as const;
-const UP_SIGN = [1, 1, 1, 1, 1, -1] as const;
+
+/** A cell box this node cannot build, in its words. */
+const BOX_TAIL = "so it has no faces to build. Fix the node that made it, or drop the cell first (filterByExpression).";
+const BOX_INSIDE_OUT: InsideOutWording = {
+  state: "is INSIDE OUT",
+  tail: "so its faces would face inward and overlap. Fix the node that made it (a box of no volume, min = max, is fine and kept), or drop the cell first (filterByExpression).",
+};
 
 /** Every cell's box as mesh faces, cell by cell. */
 export const boxesToMesh = standardNode<BoxesToMeshParams, BoxesToMeshInputs, BoxesToMeshOutputs>({
@@ -164,14 +166,12 @@ export const boxesToMesh = standardNode<BoxesToMeshParams, BoxesToMeshInputs, Bo
     const src = requireGeometry(inputs, "in", NODE);
     const srcSet = src.attrs.point;
     const n = srcSet.count;
-    for (const name of ["boundsMin", "boundsMax"] as const) {
-      const attr = srcSet.get(name);
-      if (attr === undefined || attr.type !== "f32" || attr.tupleSize !== 3) {
-        throw new Error(
-          `${NODE}: the input on pin "in" ${attr === undefined ? `has no "${name}" point attribute` : `has "${name}" as ${attr.type} tupleSize ${attr.tupleSize}`}; a cell's box is the standard f32 tuple-3 pair boundsMin/boundsMax. Give the cells their boxes with setBounds (or splitBox, placeBox) first.`,
-        );
-      }
-    }
+    const { lo, hi } = requireBoxColumns(
+      NODE,
+      srcSet,
+      "in",
+      "a cell's box is the standard f32 tuple-3 pair boundsMin/boundsMax. Give the cells their boxes with setBounds (or splitBox, placeBox) first.",
+    );
 
     // ---- the names this node writes, checked against each other and
     // against what the cells carry (decided once, before any cell).
@@ -186,7 +186,7 @@ export const boxesToMesh = standardNode<BoxesToMeshParams, BoxesToMeshInputs, Bo
         throw new Error(`${NODE}: param "${slot}" is ${JSON.stringify(name)}; give an attribute name, or "" to write none.`);
       }
       if (name === "") continue;
-      if (name === "P" || name === "rot" || name === "scale") {
+      if (NOT_CARRIED.has(name)) {
         throw new Error(
           `${NODE}: param "${slot}" is "${name}", the standard transform attribute${name === "P" ? " this node writes the mesh's positions into" : " a mesh point does not carry here"}; give the ${slot === "faceAttr" ? "face code" : "cell index"} a name of its own, e.g. "${slot === "faceAttr" ? "boxSide" : "cell"}".`,
         );
@@ -217,26 +217,14 @@ export const boxesToMesh = standardNode<BoxesToMeshParams, BoxesToMeshInputs, Bo
       "cell",
       "a quad count per world axis [x, y, z]",
     );
-    const lo = srcSet.require("boundsMin").data as Float32Array;
-    const hi = srcSet.require("boundsMax").data as Float32Array;
     const subs = new Uint32Array(n * 3);
+    const pointsOf = new Uint32Array(n);
     let totalPoints = 0;
     let totalTris = 0;
     for (let i = 0; i < n; i++) {
       if ((i & (CANCEL_STRIDE - 1)) === 0) checkCancelled();
       for (let k = 0; k < 3; k++) {
-        const l = lo[i * 3 + k];
-        const h = hi[i * 3 + k];
-        if (!Number.isFinite(l) || !Number.isFinite(h)) {
-          throw new Error(
-            `${NODE}: cell ${i}'s box is not finite along ${AXIS_NAMES[k]} — boundsMin ${l}, boundsMax ${h} — so it has no faces to build. Fix the node that made it, or drop the cell first (filterByExpression).`,
-          );
-        }
-        if (!(h >= l)) {
-          throw new Error(
-            `${NODE}: cell ${i}'s box is INSIDE OUT along ${AXIS_NAMES[k]} — boundsMin ${l} is above boundsMax ${h} — so its faces would face inward and overlap. Fix the node that made it (a box of no volume, min = max, is fine and kept), or drop the cell first (filterByExpression).`,
-          );
-        }
+        requireCellBoxAxis(NODE, i, k, lo[i * 3 + k], hi[i * 3 + k], BOX_TAIL, BOX_INSIDE_OUT);
         const s = readComp(subCol, i, k);
         if (!Number.isInteger(s) || s < 1) {
           throw new Error(
@@ -254,7 +242,7 @@ export const boxesToMesh = standardNode<BoxesToMeshParams, BoxesToMeshInputs, Bo
       }
       let cellPoints = 0;
       for (const code of codes) {
-        const an = SIDE_AXIS[code];
+        const an = FACE_OUT[code];
         const nu = subs[i * 3 + ((an + 1) % 3)];
         const nv = subs[i * 3 + ((an + 2) % 3)];
         cellPoints += (nu + 1) * (nv + 1);
@@ -267,15 +255,32 @@ export const boxesToMesh = standardNode<BoxesToMeshParams, BoxesToMeshInputs, Bo
           `${NODE}: the mesh would hold more than ${MAX_MESH_POINTS} points from the input's ${n} cell(s) — cell ${i} builds ${cellPoints} (subdivisions [${subs[i * 3]}, ${subs[i * 3 + 1]}, ${subs[i * 3 + 2]}] over ${codes.length} face(s)), and the running total reached ${totalPoints + cellPoints}. The cap is on the TOTAL, so this is the cell the total ran out on rather than necessarily the largest offender. Bound the subdivisions — min(<the count field>, <the most quads you meant>) — or build fewer faces or cells.`,
         );
       }
+      pointsOf[i] = cellPoints;
       totalPoints += cellPoints;
     }
 
-    // ---- build: typed arrays sized once, filled cell by cell
-    const positions = new Float32Array(totalPoints * 3);
-    const uvs = new Float32Array(totalPoints * 2);
-    const normalData = writeNormals ? new Float32Array(totalPoints * 3) : undefined;
-    const sideOf = new Int32Array(totalPoints);
+    // ---- the columns, made before the faces are built and written in
+    // place: P first, then the cells' columns, then what this node writes,
+    // so the column order is stable. A cell's points are contiguous, so the
+    // map from point to cell is known from the counts alone.
     const cellOf = new Uint32Array(totalPoints);
+    for (let i = 0, at = 0; i < n; i++) {
+      cellOf.fill(i, at, at + pointsOf[i]);
+      at += pointsOf[i];
+    }
+    const geo = new Geometry();
+    const pts = geo.attrs.point;
+    pts.add("P", "f32", 3, [0, 0, 0]);
+    pts.resize(totalPoints);
+    copyElements(carried, pts, cellOf, totalPoints, n);
+    const positions = pts.require("P").writable() as Float32Array;
+    const uvs = pts.add("uv", "f32", 2, 0).writable() as Float32Array;
+    const normalData = writeNormals ? (pts.add("normal", "f32", 3, 0).writable() as Float32Array) : undefined;
+    const sideOf = params.faceAttr !== "" ? (pts.add(params.faceAttr, "i32", 1, -1).writable() as Int32Array) : undefined;
+    if (params.cellAttr !== "") (pts.add(params.cellAttr, "i32", 1, -1).writable() as Int32Array).set(cellOf);
+    copyElements(src.attrs.detail, geo.attrs.detail, undefined, src.attrs.detail.count);
+
+    // ---- build: filled cell by cell
     const vertexToPoint = new Uint32Array(totalTris * 3);
     let pt = 0;
     let vx = 0;
@@ -283,8 +288,8 @@ export const boxesToMesh = standardNode<BoxesToMeshParams, BoxesToMeshInputs, Bo
     for (let i = 0; i < n; i++) {
       if ((i & (CANCEL_STRIDE - 1)) === 0) checkCancelled();
       for (const code of codes) {
-        const an = SIDE_AXIS[code];
-        const positive = SIDE_POSITIVE[code];
+        const an = FACE_OUT[code];
+        const positive = FACE_SIDE[code] > 0;
         const au = (an + 1) % 3;
         const av = (an + 2) % 3;
         const nu = subs[i * 3 + au];
@@ -300,12 +305,12 @@ export const boxesToMesh = standardNode<BoxesToMeshParams, BoxesToMeshInputs, Bo
         const outSign = reverse ? -1 : 1;
         // uv in the face frame: along and up are the two in-face axes, so
         // one of them is au and the other av.
-        const alongIsU = ALONG[code] === au;
+        const alongIsU = FACE_ALONG[code] === au;
         // Under `flip` the face is seen from INSIDE, where along runs right
         // to left: u is mirrored so it still reads left to right from the
         // side the triangles face. v (up) is the same from either side.
-        const alongForward = ALONG_SIGN[code] > 0 !== flip;
-        const upForward = UP_SIGN[code] > 0;
+        const alongForward = FACE_ALONG_SIGN[code] > 0 !== flip;
+        const upForward = FACE_UP_SIGN[code] > 0;
         const base = pt;
         for (let iv = 0; iv <= nv; iv++) {
           for (let iu = 0; iu <= nu; iu++) {
@@ -327,8 +332,7 @@ export const boxesToMesh = standardNode<BoxesToMeshParams, BoxesToMeshInputs, Bo
             uvs[pt * 2] = (alongForward ? ia : na - ia) / na;
             uvs[pt * 2 + 1] = (upForward ? iw : nw - iw) / nw;
             if (normalData !== undefined) normalData[pt * 3 + an] = outSign;
-            sideOf[pt] = code;
-            cellOf[pt] = i;
+            if (sideOf !== undefined) sideOf[pt] = code;
             pt++;
           }
         }
@@ -358,30 +362,6 @@ export const boxesToMesh = standardNode<BoxesToMeshParams, BoxesToMeshInputs, Bo
         }
       }
     }
-
-    // ---- assemble: P first, then the cells' columns, then what this
-    // node writes, so the column order is stable.
-    const geo = new Geometry();
-    const pts = geo.attrs.point;
-    pts.add("P", "f32", 3, [0, 0, 0]);
-    pts.resize(totalPoints);
-    (pts.require("P").writable() as Float32Array).set(positions);
-    copyElements(carried, pts, cellOf, totalPoints, n);
-    pts.add("uv", "f32", 2, 0);
-    (pts.require("uv").writable() as Float32Array).set(uvs);
-    if (normalData !== undefined) {
-      pts.add("normal", "f32", 3, 0);
-      (pts.require("normal").writable() as Float32Array).set(normalData);
-    }
-    if (params.faceAttr !== "") {
-      pts.add(params.faceAttr, "i32", 1, -1);
-      (pts.require(params.faceAttr).writable() as Int32Array).set(sideOf);
-    }
-    if (params.cellAttr !== "") {
-      pts.add(params.cellAttr, "i32", 1, -1);
-      (pts.require(params.cellAttr).writable() as Int32Array).set(cellOf);
-    }
-    copyElements(src.attrs.detail, geo.attrs.detail, undefined, src.attrs.detail.count);
 
     const starts = new Uint32Array(totalTris);
     const counts = new Uint32Array(totalTris);

@@ -73,6 +73,7 @@ import { STANDARD_POINT_ATTRS } from "../data/points.js";
 import { deriveGeometry } from "../data/derive.js";
 import { makeGeometryItem } from "../graph/index.js";
 import { hashCombine } from "../random/index.js";
+import { FACE_ALONG, FACE_ALONG_SIGN, faceCodeOf } from "./faceFrame.js";
 import type {
   BoxContactInputs,
   BoxContactOutputs,
@@ -197,7 +198,7 @@ class PairBuffer {
       this.q = q;
       this.t = t;
     }
-    for (let k = 0; k < c; k++) this.t[this.count + k] = hits[k];
+    this.t.set(hits, this.count);
     this.t.subarray(this.count, need).sort();
     this.q.fill(i, this.count, need);
     this.count = need;
@@ -842,15 +843,11 @@ function exclusionKeys(
   return { q, t };
 }
 
-/** The pair columns' resolved names; "" writes none (the frame four only). */
-interface PairNames {
-  readonly query: string;
-  readonly target: string;
-  readonly outward: string;
-  readonly outAxis: string;
-  readonly alongAxis: string;
-  readonly alongSign: string;
-}
+/** The pair columns' names, as the params carry them; "" writes none (the frame four only). */
+type PairNames = Pick<
+  BoxContactParams,
+  "pairQueryAttr" | "pairTargetAttr" | "pairOutwardAttr" | "pairOutAxisAttr" | "pairAlongAxisAttr" | "pairAlongSignAttr"
+>;
 
 /**
  * The `pairs` cloud: one point per (query, target) hit, in the buffer's
@@ -909,12 +906,12 @@ function writePairs(
   const lo = pts.require("boundsMin").writable() as Float32Array;
   const hi = pts.require("boundsMax").writable() as Float32Array;
   const seeds = pts.require("seed").writable() as Uint32Array;
-  const qOut = pts.replace(names.query, "i32", 1, -1).writable() as Int32Array;
-  const tOut = pts.replace(names.target, "i32", 1, -1).writable() as Int32Array;
-  const outw = frame && names.outward !== "" ? (pts.replace(names.outward, "f32", 3, [0, 0, 0]).writable() as Float32Array) : null;
-  const oAxis = frame && names.outAxis !== "" ? (pts.replace(names.outAxis, "i32", 1, -1).writable() as Int32Array) : null;
-  const aAxis = frame && names.alongAxis !== "" ? (pts.replace(names.alongAxis, "i32", 1, -1).writable() as Int32Array) : null;
-  const aSign = frame && names.alongSign !== "" ? (pts.replace(names.alongSign, "i32", 1, 0).writable() as Int32Array) : null;
+  const qOut = pts.replace(names.pairQueryAttr, "i32", 1, -1).writable() as Int32Array;
+  const tOut = pts.replace(names.pairTargetAttr, "i32", 1, -1).writable() as Int32Array;
+  const outw = frame && names.pairOutwardAttr !== "" ? (pts.replace(names.pairOutwardAttr, "f32", 3, [0, 0, 0]).writable() as Float32Array) : null;
+  const oAxis = frame && names.pairOutAxisAttr !== "" ? (pts.replace(names.pairOutAxisAttr, "i32", 1, -1).writable() as Int32Array) : null;
+  const aAxis = frame && names.pairAlongAxisAttr !== "" ? (pts.replace(names.pairAlongAxisAttr, "i32", 1, -1).writable() as Int32Array) : null;
+  const aSign = frame && names.pairAlongSignAttr !== "" ? (pts.replace(names.pairAlongSignAttr, "i32", 1, 0).writable() as Int32Array) : null;
   const tc = T.centre;
   const th = T.half;
   for (let w = 0; w < k; w++) {
@@ -972,11 +969,13 @@ function writePairs(
     const face = flushCount === 1;
     if (outw !== null && face) outw[w * 3 + faceAxis] = faceSide;
     if (oAxis !== null) oAxis[w] = face ? faceAxis : -1;
-    // shellSplit's along: x for the z walls (sign = the side: south -1,
-    // north +1), z for the x walls (west +1, east -1), x for the floor and
-    // the ceiling (+1) — along x up = outward on every face.
-    if (aAxis !== null) aAxis[w] = face ? (faceAxis === 0 ? 2 : 0) : -1;
-    if (aSign !== null) aSign[w] = face ? (faceAxis === 2 ? faceSide : faceAxis === 0 ? -faceSide : 1) : 0;
+    // shellSplit's along for the wall facing that way (faceFrame.ts' face
+    // table): x for the z walls (sign = the side: south -1, north +1), z
+    // for the x walls (west +1, east -1), x for the floor and the ceiling
+    // (+1) — along x up = outward on every face.
+    const code = face ? faceCodeOf(faceAxis, faceSide) : -1;
+    if (aAxis !== null) aAxis[w] = face ? FACE_ALONG[code] : -1;
+    if (aSign !== null) aSign[w] = face ? FACE_ALONG_SIGN[code] : 0;
   }
   return geo;
 }
@@ -1188,14 +1187,6 @@ export const boxContact = standardNode<BoxContactParams, BoxContactInputs, BoxCo
         }
       }
     }
-    const pairNames: PairNames = {
-      query: params.pairQueryAttr,
-      target: params.pairTargetAttr,
-      outward: params.pairOutwardAttr,
-      outAxis: params.pairOutAxisAttr,
-      alongAxis: params.pairAlongAxisAttr,
-      alongSign: params.pairAlongSignAttr,
-    };
     // Both frames "world": every box is axis-aligned, so a pair's
     // intersection is a box. Under "touch" a one-face contact has a frame.
     const pairRegion = !qLocal && !tLocal;
@@ -1372,7 +1363,7 @@ export const boxContact = standardNode<BoxContactParams, BoxContactInputs, BoxCo
       pairs:
         pairs === null
           ? []
-          : [makeGeometryItem(writePairs(pairs, pairNames, pairRegion, pairFrame, qc, qh, T, tgt, seed, checkCancelled))],
+          : [makeGeometryItem(writePairs(pairs, params, pairRegion, pairFrame, qc, qh, T, tgt, seed, checkCancelled))],
     };
   },
 });

@@ -19,6 +19,8 @@
  */
 import { canonicalOneOf } from "../diagnostics/canonical.js";
 
+const AXIS_NAMES = ["x", "y", "z"] as const;
+
 /**
  * How many f32 ulps "on a line" or "at the box's end" may be off by. Bounds
  * are stored f32, so a box edge typed as 1.2 is 1.2000000477, and on a 0.4
@@ -55,6 +57,41 @@ export function f32HalfUlp(x: number): number {
   return f32Ulp(x) / 2;
 }
 
+/**
+ * The tolerance a FACE is held to on one axis of a box `[l, h]`: ULP_TOL
+ * f32 ulps at the larger magnitude of its two coordinates, which is where
+ * the box itself is known to. "On a line", "flush with a plane", "fills the
+ * box exactly" and "the faces meet" all mean within this, on every box node
+ * — `splitBox`'s fill and its far end, `shellSplit`'s opposite faces,
+ * `placeBox`'s flush corners, `offsetBox`'s crossed faces, a size snap
+ * here. At the box's coordinates rather than at the size of what is laid
+ * against it: far from the origin a stored span is only known to a few
+ * ulps of where it sits (see ULP_TOL for what a relative tolerance did).
+ */
+export function coordTol(l: number, h: number): number {
+  return ULP_TOL * f32Ulp(Math.max(Math.abs(l), Math.abs(h)));
+}
+
+/**
+ * {@link coordTol} for a SUM of two f32 sizes held against the box `[l, h]`
+ * — `shellSplit`'s two opposite thicknesses, `offsetBox`'s two inward
+ * moves — plus half an f32 ulp of each, since a sum errs more than one
+ * coordinate ({@link f32HalfUlp}). `splitBox`, which sums any number of
+ * sizes, adds the halves itself.
+ */
+export function sumTol(l: number, h: number, a: number, b: number): number {
+  return coordTol(l, h) + f32HalfUlp(a) + f32HalfUlp(b);
+}
+
+/**
+ * How far a stored SPAN `h - l` may be off the length it was meant as:
+ * half an f32 ulp at each of its two corners. `splitBox`'s axis "longest"
+ * reads it to tell a tie f32 cannot resolve from a real difference.
+ */
+export function spanErr(l: number, h: number): number {
+  return f32HalfUlp(l) + f32HalfUlp(h);
+}
+
 /** Rounding codes (`repeatRound`, `snapMode`), decided once from their strings. */
 export type RoundCode = 0 | 1 | 2; // floor | round | ceil
 
@@ -85,10 +122,12 @@ export const SNAP_TO = ["lattice", "size"] as const;
 export interface BoxSnap {
   /** How the MIN face rounds onto the lattice (`snapTo` "lattice"). */
   readonly lo: RoundCode;
-  /** How the MAX face rounds onto the lattice (`snapTo` "lattice"). */
+  /**
+   * How the MAX face rounds onto the lattice (`snapTo` "lattice"), and how
+   * a SIZE in steps rounds (`snapTo` "size"): the same code, since the max
+   * face moving up is the box growing.
+   */
   readonly hi: RoundCode;
-  /** How a SIZE in steps rounds (`snapTo` "size"). */
-  readonly size: RoundCode;
   /** `snapTo` is "size". */
   readonly toSize: boolean;
 }
@@ -108,8 +147,7 @@ export function decodeBoxSnap(node: string, snapMode: unknown, snapTo: unknown):
   // floor 0, round 1, ceil 2
   const lo: RoundCode = mode === "round" ? 1 : mode === "floor" || mode === "out" ? 0 : 2;
   const hi: RoundCode = mode === "round" ? 1 : mode === "floor" || mode === "in" ? 0 : 2;
-  const size: RoundCode = mode === "round" ? 1 : mode === "floor" || mode === "in" ? 0 : 2;
-  return { lo, hi, size, toSize: to === "size" };
+  return { lo, hi, toSize: to === "size" };
 }
 
 /**
@@ -124,10 +162,10 @@ export function snapBoxAxis(l: number, h: number, step: number, rule: BoxSnap, o
   if (rule.toSize) {
     const size = h - l;
     if (size >= 0) {
-      const tol = Math.min(ULP_TOL * f32Ulp(Math.max(Math.abs(l), Math.abs(h))), step / 4);
+      const tol = Math.min(coordTol(l, h), step / 4);
       const q = size / step;
       const r = Math.round(q);
-      const steps = Math.abs(size - r * step) <= tol ? r : roundBy(rule.size, q);
+      const steps = Math.abs(size - r * step) <= tol ? r : roundBy(rule.hi, q);
       const c = 0.5 * (l + h);
       const half = 0.5 * steps * step;
       l = c - half;
@@ -139,6 +177,23 @@ export function snapBoxAxis(l: number, h: number, step: number, rule: BoxSnap, o
   }
   out[0] = snapToLattice(l, step, rule.lo);
   out[1] = snapToLattice(h, step, rule.hi);
+}
+
+/**
+ * The `snap` param of a box node — a lattice step per WORLD axis, 0 for
+ * none — checked once: every component a finite number >= 0, or a refusal
+ * naming the component.
+ */
+export function requireSnapSteps(node: string, snap: readonly unknown[]): readonly number[] {
+  for (let a = 0; a < 3; a++) {
+    const v = snap[a];
+    if (typeof v !== "number" || !Number.isFinite(v) || v < 0) {
+      throw new Error(
+        `${node}: param "snap" component ${a} (${AXIS_NAMES[a]}) is ${typeof v === "number" ? String(v) : JSON.stringify(v)}; a lattice step is a finite number >= 0, and 0 means no snapping on that axis.`,
+      );
+    }
+  }
+  return snap as readonly number[];
 }
 
 /**

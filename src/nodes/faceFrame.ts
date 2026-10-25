@@ -17,6 +17,7 @@
  * "face", and a missing one is refused by name — every missing one at once
  * — so the presence of an attribute never changes what a number means.
  */
+import { canonicalOneOf } from "../diagnostics/canonical.js";
 import { suggestNames } from "../diagnostics/didYouMean.js";
 import type { Attribute } from "../data/index.js";
 
@@ -26,14 +27,48 @@ export const BOX_FRAMES = ["world", "face"] as const;
 export const FACE_AXIS_NAMES = ["along", "up", "out"] as const;
 const AXIS_NAMES = ["x", "y", "z"] as const;
 
-/** The three frame columns, looked up once by name, and the names they were read under. */
-export interface FaceFrameColumns {
-  readonly alongAxis: ArrayLike<number>;
-  readonly alongSign: ArrayLike<number>;
-  readonly outward: ArrayLike<number>;
-  readonly alongAxisAttr: string;
-  readonly alongSignAttr: string;
-  readonly outwardAttr: string;
+/**
+ * THE FACE CONVENTION, stated once: shellSplit's face codes and the frame
+ * each one carries, indexed by the code. shellSplit writes it, boxesToMesh
+ * lays its sides and their uv by it, and boxContact's `pairs` write it on a
+ * one-face contact. Code 0 floor (min y), 1 south (min z), 2 north (max z),
+ * 3 west (min x), 4 east (max x), 5 ceiling (max y), 6 the interior.
+ *
+ * Per code: the along, up and out axes (0 = x, 1 = y, 2 = z), the signs of
+ * along and up, the side of the box (-1 min, +1 max) and the outward
+ * normal, chosen so that (ALONG_SIGN * e[ALONG]) x (UP_SIGN * e[UP]) =
+ * OUTWARD on every face — the shellSplit test checks that cross product,
+ * and the faceFrame test that {@link decodeFaceFrame} derives this up from
+ * this along and out. On a wall up is +y and along runs left to right as
+ * seen from outside. The interior faces nowhere: its frame is the world's
+ * (along +x, up +y, out z), its side 0 and its outward normal zero.
+ */
+export const FACE_NAMES = ["floor", "south", "north", "west", "east", "ceiling"] as const;
+export const FACE_ALONG = [0, 0, 0, 2, 2, 0, 0] as const;
+export const FACE_ALONG_SIGN = [1, -1, 1, 1, -1, 1, 1] as const;
+export const FACE_UP = [2, 1, 1, 1, 1, 2, 1] as const;
+export const FACE_UP_SIGN = [1, 1, 1, 1, 1, -1, 1] as const;
+export const FACE_OUT = [1, 2, 2, 0, 0, 1, 2] as const;
+export const FACE_SIDE = [-1, -1, 1, -1, 1, 1, 0] as const;
+export const FACE_OUTWARD: readonly (readonly [number, number, number])[] = [
+  [0, -1, 0],
+  [0, 0, -1],
+  [0, 0, 1],
+  [-1, 0, 0],
+  [1, 0, 0],
+  [0, 1, 0],
+  [0, 0, 0],
+];
+/** The interior's face code, after the six shell faces. */
+export const FACE_INTERIOR = 6;
+
+/** Min-side and max-side face codes per out axis: x west / east, y floor / ceiling, z south / north. */
+const MIN_FACE = [3, 0, 1] as const;
+const MAX_FACE = [4, 5, 2] as const;
+
+/** The face code of the box side normal to `outAxis` (0, 1, 2) on side `side` (< 0 the min side, else the max). */
+export function faceCodeOf(outAxis: number, side: number): number {
+  return side < 0 ? MIN_FACE[outAxis] : MAX_FACE[outAxis];
 }
 
 /** The three attribute-name params, as a node's params carry them. */
@@ -41,6 +76,27 @@ export interface FaceFrameParams {
   readonly alongAxisAttr: string;
   readonly alongSignAttr: string;
   readonly outwardAttr: string;
+}
+
+/** The three frame columns, looked up once by name, and the names they were read under. */
+export interface FaceFrameColumns extends FaceFrameParams {
+  readonly alongAxis: ArrayLike<number>;
+  readonly alongSign: ArrayLike<number>;
+  readonly outward: ArrayLike<number>;
+}
+
+/**
+ * The `frame` param of `placeBox` and `offsetBox`, decided once: true for
+ * "face", false for "world", or a refusal naming both.
+ */
+export function decodeBoxFrame(node: string, value: unknown): boolean {
+  const frame = canonicalOneOf(BOX_FRAMES, value);
+  if (frame === undefined) {
+    throw new Error(
+      `${node}: param "frame" is ${JSON.stringify(value)}; valid: ${BOX_FRAMES.join(", ")} — "face" is the frame shellSplit writes (along, up, out), read from alongAxisAttr, alongSignAttr and outwardAttr.`,
+    );
+  }
+  return frame === "face";
 }
 
 const SLOTS = [
@@ -93,6 +149,10 @@ export function readFaceFrame(
   };
 }
 
+/** Why a cell with no face has no frame: said of an along axis of -1 and of a sign of 0. */
+const NO_FACE =
+  " — what shellSplit leaves on a cell its `where` passed through, and what boxContact writes on a pair that touches only along an edge or at a corner: neither has a face, so neither has a frame";
+
 /**
  * Cell `i`'s frame: `axis[c]` and `sign[c]` (+1 / -1) are the world axis
  * and direction of frame component c (along, up, out). Refuses, naming the
@@ -108,12 +168,12 @@ export function decodeFaceFrame(node: string, cols: FaceFrameColumns, i: number,
   // (-1, 0, [0, 0, 0]), and that is the thing to say about it.
   if (!(av === 0 || av === 1 || av === 2)) {
     throw new Error(
-      `${node}: frame "face" needs cell ${i}'s along axis ("${cols.alongAxisAttr}") to be 0 (x), 1 (y) or 2 (z), and it is ${av}${av === -1 ? " — what shellSplit leaves on a cell its `where` passed through, and what boxContact writes on a pair that touches only along an edge or at a corner: neither has a face, so neither has a frame" : ""}. Leave such cells out with "where", e.g. where ge(attribute("${cols.alongAxisAttr}"), 0), or use frame "world".`,
+      `${node}: frame "face" needs cell ${i}'s along axis ("${cols.alongAxisAttr}") to be 0 (x), 1 (y) or 2 (z), and it is ${av}${av === -1 ? NO_FACE : ""}. Leave such cells out with "where", e.g. where ge(attribute("${cols.alongAxisAttr}"), 0), or use frame "world".`,
     );
   }
   if (!(sv > 0 || sv < 0) || !Number.isFinite(sv)) {
     throw new Error(
-      `${node}: frame "face" needs cell ${i}'s along sign ("${cols.alongSignAttr}") to be +1 or -1, and it is ${sv}${sv === 0 ? " — what shellSplit leaves on a cell its `where` passed through, and what boxContact writes on a pair that touches only along an edge or at a corner: neither has a face, so neither has a frame" : ""}. Leave such cells out with "where", or use frame "world".`,
+      `${node}: frame "face" needs cell ${i}'s along sign ("${cols.alongSignAttr}") to be +1 or -1, and it is ${sv}${sv === 0 ? NO_FACE : ""}. Leave such cells out with "where", or use frame "world".`,
     );
   }
   const n = cols.outward;

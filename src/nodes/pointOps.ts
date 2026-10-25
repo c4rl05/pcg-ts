@@ -1887,19 +1887,18 @@ function boxesAtPoints(
   let sy = 0;
   let sz = 0;
   if (isField(size)) {
-    const col = requireVec3Column(
+    // A size reading a corner (`attribute("boundsMax", 3)`, box("size"))
+    // can be a zero-copy view of a column written below. No snapshot is
+    // needed, unlike the corners' path: point i reads ITS OWN size before
+    // it writes its own corners, and writes nothing else, so no element is
+    // read after it was overwritten.
+    sizeCol = requireVec3Column(
       resolveOn(geo, "point", size, seed, "setBounds", "size"),
       "setBounds",
       "size",
       "point",
       "a box size per world axis [x, y, z], each a length >= 0",
     );
-    // A size reading a corner (`attribute("boundsMax", 3)`, box("size"))
-    // can be a zero-copy view of a column written below. No snapshot is
-    // needed, unlike the corners' path: point i reads ITS OWN size before
-    // it writes its own corners, and writes nothing else, so no element is
-    // read after it was overwritten.
-    sizeCol = col;
   } else {
     const v = size as readonly number[];
     sx = v[0];

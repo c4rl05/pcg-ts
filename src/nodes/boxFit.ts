@@ -54,3 +54,14 @@ export function fitRefusal(node: string, value: unknown, accepted: readonly FitW
   const reason = word === undefined || because === undefined ? "" : ` On the other box nodes ${MEANING[word]}; here ${because}.`;
   return `${node}: param "fit" is ${JSON.stringify(value)}; valid: ${accepted.join(", ")}.${reason}`;
 }
+
+/**
+ * A node's `fit` param decoded once: its index in `accepted` — the node's
+ * own fit code — or the {@link fitRefusal} naming the node's list and, for
+ * a glossary word it does not take, `why`.
+ */
+export function decodeFit(node: string, value: unknown, accepted: readonly FitWord[], why: Partial<Record<FitWord, string>>): number {
+  const word = canonicalOneOf(accepted, value);
+  if (word === undefined) throw new Error(fitRefusal(node, value, accepted, why));
+  return (accepted as readonly string[]).indexOf(word);
+}

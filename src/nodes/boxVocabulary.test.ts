@@ -12,7 +12,18 @@ import { describe, expect, it } from "vitest";
 import { Geometry, createPointCloud } from "../data/index.js";
 import { makeGeometryItem } from "../graph/index.js";
 import { FIT_WORDS, type FitWord, fitGlossary, fitRefusal } from "./boxFit.js";
-import { decodeFaceFrame, readFaceFrame } from "./faceFrame.js";
+import {
+  FACE_ALONG,
+  FACE_ALONG_SIGN,
+  FACE_OUT,
+  FACE_OUTWARD,
+  FACE_SIDE,
+  FACE_UP,
+  FACE_UP_SIGN,
+  decodeFaceFrame,
+  faceCodeOf,
+  readFaceFrame,
+} from "./faceFrame.js";
 import { BOX_SNAP_MODES, decodeBoxSnap, f32Ulp, refuseCutSnapMode, snapBoxAxis, snapToLattice } from "./latticeSnap.js";
 import { offsetBox } from "./offsetBox.js";
 import { placeBox } from "./placeBox.js";
@@ -89,13 +100,13 @@ describe("latticeSnap.ts", () => {
     }
   });
 
-  it("decodes the five snapMode words into face and size rounding codes (floor 0, round 1, ceil 2)", () => {
+  it("decodes the five snapMode words into face rounding codes (floor 0, round 1, ceil 2); a size rounds as the max face", () => {
     const codes = Object.fromEntries(BOX_SNAP_MODES.map((m) => [m, decodeBoxSnap("n", m, "lattice")]));
-    expect(codes.round).toEqual({ lo: 1, hi: 1, size: 1, toSize: false });
-    expect(codes.floor).toEqual({ lo: 0, hi: 0, size: 0, toSize: false });
-    expect(codes.ceil).toEqual({ lo: 2, hi: 2, size: 2, toSize: false });
-    expect(codes.out).toEqual({ lo: 0, hi: 2, size: 2, toSize: false }); // grows
-    expect(codes.in).toEqual({ lo: 2, hi: 0, size: 0, toSize: false }); // shrinks
+    expect(codes.round).toEqual({ lo: 1, hi: 1, toSize: false });
+    expect(codes.floor).toEqual({ lo: 0, hi: 0, toSize: false });
+    expect(codes.ceil).toEqual({ lo: 2, hi: 2, toSize: false });
+    expect(codes.out).toEqual({ lo: 0, hi: 2, toSize: false }); // grows
+    expect(codes.in).toEqual({ lo: 2, hi: 0, toSize: false }); // shrinks
     expect(decodeBoxSnap("n", "round", "size").toSize).toBe(true);
     expect(() => decodeBoxSnap("n", "nearest", "lattice")).toThrow('n: param "snapMode" is "nearest"; valid: round, floor, ceil, out, in — ');
     expect(() => decodeBoxSnap("n", "round", "grid")).toThrow('n: param "snapTo" is "grid"; valid: lattice, size.');
@@ -159,6 +170,17 @@ describe("faceFrame.ts", () => {
             n++;
           }
     expect(n).toBe(24);
+  });
+
+  it("the derived up is the face table's up, on every face code", () => {
+    for (let k = 0; k < 6; k++) {
+      const axis = [0, 0, 0];
+      const sign = [0, 0, 0];
+      decodeFaceFrame("n", colsOf(FACE_ALONG[k], FACE_ALONG_SIGN[k], [...FACE_OUTWARD[k]]), 0, axis, sign);
+      expect([axis[1], sign[1]], `face ${k}`).toEqual([FACE_UP[k], FACE_UP_SIGN[k]]);
+      expect([axis[2], sign[2]], `face ${k}`).toEqual([FACE_OUT[k], FACE_SIDE[k]]);
+      expect(faceCodeOf(FACE_OUT[k], FACE_SIDE[k])).toBe(k);
+    }
   });
 
   it("the derived up is the up shellSplit writes, on every face", async () => {

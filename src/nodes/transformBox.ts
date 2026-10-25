@@ -33,6 +33,7 @@ import { canonicalOneOf } from "../diagnostics/canonical.js";
 import { deriveGeometry } from "../data/derive.js";
 import { isField } from "../fields/index.js";
 import { makeGeometryItem } from "../graph/index.js";
+import { type InsideOutWording, requireBoxColumns, requireCellBoxAxis, resolveWhere } from "./boxCells.js";
 import type {
   TransformBoxInputs,
   TransformBoxOutputs,
@@ -44,7 +45,6 @@ import {
   readComp,
   requireFinitePlainParam,
   requireGeometry,
-  requireScalarColumn,
   requireVec3Column,
   resolveOn,
 } from "./util.js";
@@ -61,6 +61,13 @@ const AXIS_NAMES = ["x", "y", "z"] as const;
 const PIVOT_WORLD = 0;
 const PIVOT_CELL = 1;
 const PIVOT_UNION = 2;
+
+/** A cell box this node cannot transform, in its words. */
+const BOX_TAIL = 'so it has no faces to transform. Fix the node that made it, or leave the cell out with "where".';
+const BOX_INSIDE_OUT: InsideOutWording = {
+  state: "ARRIVED inside out",
+  tail: 'so a scale has no inside to keep. Fix the node that made it, or leave the cell out with "where".',
+};
 
 /**
  * The point a fraction `f` of the way from `a` to `b`, EXACT at both ends:
@@ -153,14 +160,10 @@ export const transformBox = standardNode<TransformBoxParams, TransformBoxInputs,
     const src = requireGeometry(inputs, "in", NODE);
     const srcSet = src.attrs.point;
     const n = srcSet.count;
-    for (const name of ["boundsMin", "boundsMax"] as const) {
-      const attr = srcSet.get(name);
-      if (attr === undefined || attr.type !== "f32" || attr.tupleSize !== 3) {
-        throw new Error(
-          `${NODE}: the input on pin "in" ${attr === undefined ? `has no "${name}" point attribute` : `has "${name}" as ${attr.type} tupleSize ${attr.tupleSize}`}; a cell's box is the standard f32 tuple-3 pair boundsMin/boundsMax. Give the cells their boxes with setBounds first.`,
-        );
-      }
-    }
+    // The input's corners, taken before the output's columns are made
+    // writable: `deriveGeometry` shares columns copy-on-write, so these
+    // stay the input's while the writable views below are the output's.
+    const { lo, hi } = requireBoxColumns(NODE, srcSet, "in");
 
     // ---- per-cell values, resolved on the INPUT before anything is written
     const [sCol, pCol, tCol] = (["scale", "pivot", "translate"] as const).map((name) =>
@@ -172,46 +175,14 @@ export const transformBox = standardNode<TransformBoxParams, TransformBoxInputs,
         name === "pivot" ? "a pivot is a point (or a fraction) per world axis [x, y, z]" : `a ${name} is one number per world axis [x, y, z]`,
       ),
     );
-    let whereCol: ArrayLike<number> | undefined;
-    let whereAll = true;
-    if (isField(params.where)) {
-      whereCol = requireScalarColumn(
-        resolveOn(src, "point", params.where, seed, NODE, "where"),
-        NODE,
-        "where",
-        "cell",
-        "a transform-or-leave flag",
-      ).data;
-    } else {
-      whereAll = (params.where as number) !== 0;
-    }
-    const chosen = (i: number): boolean => (whereCol === undefined ? whereAll : whereCol[i] !== 0);
-
-    // The input's corners, taken before the output's columns are made
-    // writable: `deriveGeometry` shares columns copy-on-write, so these
-    // stay the input's while the writable views below are the output's.
-    const lo = srcSet.require("boundsMin").data as Float32Array;
-    const hi = srcSet.require("boundsMax").data as Float32Array;
+    const chosen = resolveWhere(src, params.where, seed, NODE, "a transform-or-leave flag");
 
     // Every chosen box is checked BEFORE the union is taken from them, so
     // a bad box is refused as itself rather than as a bad pivot.
     for (let i = 0; i < n; i++) {
       if ((i & (CANCEL_STRIDE - 1)) === 0) checkCancelled();
       if (!chosen(i)) continue;
-      for (let k = 0; k < 3; k++) {
-        const l = lo[i * 3 + k];
-        const h = hi[i * 3 + k];
-        if (!Number.isFinite(l) || !Number.isFinite(h)) {
-          throw new Error(
-            `${NODE}: cell ${i}'s box is not finite along ${AXIS_NAMES[k]} — boundsMin ${l}, boundsMax ${h} — so it has no faces to transform. Fix the node that made it, or leave the cell out with "where".`,
-          );
-        }
-        if (!(h >= l)) {
-          throw new Error(
-            `${NODE}: cell ${i}'s box ARRIVED inside out along ${AXIS_NAMES[k]} — boundsMin ${l} is above boundsMax ${h} — so a scale has no inside to keep. Fix the node that made it, or leave the cell out with "where".`,
-          );
-        }
-      }
+      for (let k = 0; k < 3; k++) requireCellBoxAxis(NODE, i, k, lo[i * 3 + k], hi[i * 3 + k], BOX_TAIL, BOX_INSIDE_OUT);
     }
 
     // ---- the union box, only when the pivot is a fraction of it
