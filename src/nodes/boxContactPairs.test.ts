@@ -674,22 +674,175 @@ describe("boxContact pairs: on demand", () => {
   });
 
   it("the pair ceiling is a refusal only when the pairs are read", async () => {
-    // 1025 x 1024 boxes all overlapping: 1,049,600 pairs, past the ceiling.
-    const qs = cloud(Array.from({ length: 1025 }, () => box([0, 0, 0], [1, 1, 1])));
-    const ts = cloud(Array.from({ length: 1024 }, () => box([0, 0, 0], [1, 1, 1])));
-    const msg = await rejection(run(qs, ts, { mode: "overlap" }));
-    expect(msg).toMatch(/more than 1048576 \(query, target\) pairs/);
+    // 1774 x 1774 boxes all overlapping: 3,147,076 pairs, past the ceiling of
+    // 3 * 2^20 = 3,145,728. 1773 queries make 3,145,302, under it, so the
+    // refusal comes at the last query with every pair counted.
+    const qs = cloud(Array.from({ length: 1774 }, () => box([0, 0, 0], [1, 1, 1])));
+    const msg = await rejection(run(qs, qs, { mode: "overlap" }));
+    expect(msg).toMatch(/^boxContact: output "pairs" refused/);
+    expect(msg).toMatch(/at least 3147076 \(query, target\) pairs, past its ceiling of 3145728/);
+    expect(msg).toMatch(/first 1774 of 1774 query boxes on "in" against 1774 target boxes on "targets" in mode "overlap"/);
+    expect(msg).toMatch(/1774\.0 targets met per query/);
+    // Here the count does say each query met nearly every target, so the
+    // message may; already "overlap", it offers no switch to "overlap".
+    expect(msg).toMatch(/nearly all 1774 targets for each query scanned/);
     expect(msg).toMatch(/"margin"/);
+    expect(msg).toMatch(/set "countAttr"/);
+    expect(msg).not.toMatch(/mode "overlap" rather than/);
     // Unread (the executor hands an empty set), the same cook succeeds.
     const o = await boxContact.execute({
-      inputs: { in: [makeGeometryItem(qs)], targets: [makeGeometryItem(ts)] },
+      inputs: { in: [makeGeometryItem(qs)], targets: [makeGeometryItem(qs)] },
       params: { ...boxContact.defaultParams, mode: "overlap" },
       seed: 1,
       checkCancelled() {},
       readOutputs: new Set<string>(),
     });
     expect((o as Record<string, DataCollection>).pairs).toEqual([]);
-  }, 60_000);
+  }, 120_000);
+});
+
+// ---------------------------------------------------------------------------
+// Dense lattices of touching unit cubes: the ordinary input the ceiling must
+// admit. Cell (x, y, z) is point x + n * (y + n * z), its box [x, x + 1] per
+// axis, so two cells touch exactly when every coordinate differs by at most
+// one. The expected counts are combinatorics, not the node: per axis a cell
+// at either end of the row has 2 cells within one of it (itself included)
+// and an interior one 3, so a cell's neighbours are the product of its three
+// spans less itself, and summed over the lattice the ordered pairs are
+// (3n - 2)^3 - n^3 (the per-axis count of (a, b) with |a - b| <= 1 is
+// n + 2(n - 1), cubed, less the n^3 pairs of a cell with itself).
+
+function lattice(n: number): Geometry {
+  const geo = createPointCloud(n * n * n);
+  const lo = geo.attrs.point.require("boundsMin").writable() as Float32Array;
+  const hi = geo.attrs.point.require("boundsMax").writable() as Float32Array;
+  for (let z = 0, i = 0; z < n; z++) {
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++, i++) {
+        lo[i * 3] = x;
+        lo[i * 3 + 1] = y;
+        lo[i * 3 + 2] = z;
+        hi[i * 3] = x + 1;
+        hi[i * 3 + 1] = y + 1;
+        hi[i * 3 + 2] = z + 1;
+      }
+    }
+  }
+  return geo;
+}
+
+/** Cells within one of coordinate `c` along a row of `n`, itself included. */
+const span = (c: number, n: number): number => (n === 1 ? 1 : c === 0 || c === n - 1 ? 2 : 3);
+
+describe("boxContact pairs: dense lattices of touching cubes", () => {
+  it("a 40 x 40 x 40 lattice under \"touch\" cooks, every neighbour pair once per direction", async () => {
+    const n = 40;
+    const N = n * n * n;
+    const geo = lattice(n);
+    const { out, pairs } = await run(geo, geo, { mode: "touch", excludeSelf: true, countAttr: "count" });
+    // 118^3 - 40^3 = 1,643,032 - 64,000.
+    expect((3 * n - 2) ** 3 - n ** 3).toBe(1_579_032);
+    expect(pairs.pointCount).toBe(1_579_032);
+    // Allocated at exactly the pair count, not the next power of two
+    // (2^21 here): the ceiling's bytes assume 120 a pair, not 159.
+    expect(pairs.attrs.point.capacity).toBe(1_579_032);
+    // Per cell: the product of its spans less itself, read off countAttr.
+    const count = out.attrs.point.require("count").data as Int32Array;
+    let sum = 0;
+    for (let z = 0, i = 0; z < n; z++) {
+      for (let y = 0; y < n; y++) {
+        for (let x = 0; x < n; x++, i++) {
+          const want = span(x, n) * span(y, n) * span(z, n) - 1;
+          if (count[i] !== want) expect([i, count[i]]).toEqual([i, want]);
+          sum += want;
+        }
+      }
+    }
+    expect(sum).toBe(1_579_032);
+    // Every pair is a real neighbour, none repeats (the order is strict), so
+    // with the count above the pair set is exactly the neighbour relation.
+    const qi = pairs.attrs.point.require("queryIndex").data as Int32Array;
+    const ti = pairs.attrs.point.require("targetIndex").data as Int32Array;
+    const axis = pairs.attrs.point.require("outAxis").data as Int32Array;
+    let faces = 0;
+    let bad = -1;
+    for (let w = 0; w < pairs.pointCount; w++) {
+      const a = qi[w];
+      const b = ti[w];
+      if (w > 0 && (a < qi[w - 1] || (a === qi[w - 1] && b <= ti[w - 1]))) bad = w;
+      const dx = Math.abs((a % n) - (b % n));
+      const dy = Math.abs((Math.floor(a / n) % n) - (Math.floor(b / n) % n));
+      const dz = Math.abs(Math.floor(a / (n * n)) - Math.floor(b / (n * n)));
+      if (a === b || dx > 1 || dy > 1 || dz > 1 || a < 0 || a >= N || b < 0 || b >= N) bad = w;
+      // A one-face contact differs on exactly one axis, and only it has a frame.
+      if ((dx + dy + dz === 1) !== (axis[w] >= 0)) bad = w;
+      if (axis[w] >= 0) faces++;
+    }
+    expect(bad).toBe(-1);
+    // Ordered face pairs: 3 axes, 2 directions, n^2 rows of n - 1 steps.
+    expect(faces).toBe(6 * n * n * (n - 1));
+  }, 120_000);
+
+  it("one huge query early in the order does not make the message claim the rest meet everything", async () => {
+    // Query 0 covers all 3,145,729 targets (one past the ceiling) and the
+    // other 9 queries lie far away and meet none, so the scan stops at query
+    // 1 of 10. What it saw was nearly every target for that one query, and
+    // the message says exactly that much: "for each query scanned".
+    const m = 3 * 1_048_576 + 1;
+    const ts = createPointCloud(m);
+    const lo = ts.attrs.point.require("boundsMin").writable() as Float32Array;
+    const hi = ts.attrs.point.require("boundsMax").writable() as Float32Array;
+    for (let j = 0; j < m; j++) {
+      lo[j * 3] = j % 2048;
+      lo[j * 3 + 1] = Math.floor(j / 2048);
+      hi[j * 3] = lo[j * 3] + 0.5;
+      hi[j * 3 + 1] = lo[j * 3 + 1] + 0.5;
+      hi[j * 3 + 2] = 0.5;
+    }
+    const qs = cloud([
+      box([-1, -1, -1], [4096, 4096, 4]),
+      ...Array.from({ length: 9 }, (_, k) => box([1e5 + 10 * k, 0, 0], [1, 1, 1])),
+    ]);
+    const msg = await rejection(run(qs, ts, { mode: "overlap" }));
+    expect(msg).toContain(`at least ${m} (query, target) pairs`);
+    expect(msg).toContain(`first 1 of 10 query boxes on "in" against ${m} target boxes`);
+    expect(msg).toContain(`nearly all ${m} targets for each query scanned`);
+    expect(msg).not.toMatch(/every box meet/);
+  }, 120_000);
+
+  it("a lattice past the ceiling is refused with the facts, not as every box meeting every box", async () => {
+    // 51^3 = 132,651 cells, 151^3 - 51^3 = 3,310,300 ordered pairs: past
+    // 3,145,728. The scan stops at the first query that crosses the ceiling,
+    // found here by the same per-cell count, accumulated in index order.
+    const n = 51;
+    const N = n * n * n;
+    const CEILING = 3 * 1_048_576;
+    let reached = 0;
+    let seen = 0;
+    for (let z = 0, i = 0; z < n && seen === 0; z++) {
+      for (let y = 0; y < n && seen === 0; y++) {
+        for (let x = 0; x < n; x++, i++) {
+          reached += span(x, n) * span(y, n) * span(z, n) - 1;
+          if (reached > CEILING) {
+            seen = i + 1;
+            break;
+          }
+        }
+      }
+    }
+    expect(seen).toBeGreaterThan(0);
+    const geo = lattice(n);
+    const msg = await rejection(run(geo, geo, { mode: "touch", excludeSelf: true }));
+    expect(msg).toMatch(/^boxContact: output "pairs" refused/);
+    expect(msg).toContain(`at least ${reached} (query, target) pairs, past its ceiling of ${CEILING}`);
+    expect(msg).toContain(`first ${seen} of ${N} query boxes on "in" against ${N} target boxes on "targets" in mode "touch"`);
+    expect(msg).toContain(`${(reached / seen).toFixed(1)} targets met per query`);
+    expect(msg).not.toMatch(/every box meet|nearly all/);
+    // The fixes, each named; under "touch" the stricter mode is one.
+    for (const fix of ["filterByExpression", "excludeAttr", "smaller regions", '"margin"', 'mode "overlap" rather than "touch"', 'set "countAttr"', 'on "out"']) {
+      expect(msg).toContain(fix);
+    }
+  }, 120_000);
 });
 
 describe("boxContact pairs: refusals", () => {
