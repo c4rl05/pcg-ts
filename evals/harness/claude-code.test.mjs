@@ -18,6 +18,7 @@ import {
   jailOf,
   launch,
   parseTranscript,
+  shellClauses,
   stripRedirects,
 } from "./agents/claude-code.mjs";
 
@@ -472,6 +473,247 @@ test("a failed cd does not move the shell where that would invent contamination"
   // An errored call whose cd stays INSIDE the sandbox is honoured either way,
   // because both readings agree about what the later paths name.
   assert.deepEqual(run([use(1, "Bash", { command: "cd node_modules/pcg-ts && false" }), res(1, true), use(2, "Bash", { command: "cat ../../graph.json" }), res(2, false)]), []);
+});
+
+test("the CLI's 'Shell cwd was reset' line moves the tracked shell back, AFTER the call that printed it", () => {
+  const root = process.platform === "win32" ? "C:\\pcg-eval\\sandboxes" : "/var/tmp/pcg-eval/sandboxes";
+  const cwd = join(root, "pcg-eval-y0YyXA", "project");
+  // facade-ab-A r1: every `cd /tmp && ...` result ENDS with this line (CLI
+  // 2.1.x), in the tool_result content; the event's tool_use_result.stderr
+  // carries it as "\nShell cwd was reset to <dir>".
+  const resetLine = `Shell cwd was reset to ${cwd}`;
+  const run = (calls, tmpEntriesAtStart = new Set(["claude", "notes.md"])) => {
+    const events = [{ type: "system", subtype: "init", cwd, session_id: "sid" }];
+    calls.forEach(([command, output = "", isError = false], i) => {
+      events.push({ type: "assistant", message: { id: `m${i}`, content: [{ type: "tool_use", id: `t${i}`, name: "Bash", input: { command } }] } });
+      events.push({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: `t${i}`, is_error: isError, content: output }] } });
+    });
+    return parseTranscript(events, { cwd, tmpEntriesAtStart, benignRoots: jailOf(cwd) });
+  };
+  const tmpPath = (name) => (process.platform === "win32" ? join(tmpdir(), name) : join("/tmp", name));
+
+  // The run's own calls after the reset (A r1 #21, #24, #34, verbatim).
+  const after = [
+    ["node_modules/.bin/pcg nodes connectPoints 2>&1 | head -5; node_modules/.bin/pcg nodes transformPoints 2>&1 | head -30"],
+    ["node build-graph.js"],
+    ["node_modules/.bin/pcg render graph.json --out ./render.png --seed 1 2>&1 | tail -5"],
+  ];
+  // A r1's shape on one line: its own write to /tmp, read back from there.
+  // (A r1 wrote the code over several lines; see the next block for why that matters.)
+  const write = ["node_modules/.bin/pcg schema 2>&1 > /tmp/schema.json"];
+  const cdTmp = "cd /tmp && node -e \"console.log(Object.keys(require('./schema.json').properties))\"";
+  const output = "[ 'formatVersion', 'nodes', 'outputs', 'params', 'seed' ]";
+
+  const reset = run([write, [cdTmp, `${output}\n${resetLine}`], ...after]);
+  assert.deepEqual(reset.readPaths.contaminating, [], "after the reset the relative calls run in the project");
+  assert.deepEqual(reset.outsideWrites, [tmpPath("schema.json")], "render.png was written in the project, not in Temp");
+  // NEGATIVE CONTROL: the same calls with no reset line. The shell stays in
+  // /tmp, so `head` and `pcg` run from Temp and render.png lands there.
+  const stays = run([write, [cdTmp, output], ...after]);
+  assert.ok(stays.readPaths.contaminating.length > 0, "a cd to /tmp with no reset line still moves the shell out");
+  assert.ok(stays.outsideWrites.includes(tmpPath("render.png")));
+  // Only the LAST line is the CLI's: the same words mid-output are the command's own text.
+  assert.ok(run([write, [cdTmp, `${resetLine}\n${output}`], ...after]).readPaths.contaminating.length > 0, "a reset line that is not last moves nothing");
+  // Content as text blocks carries it the same way.
+  assert.deepEqual(run([write, [cdTmp, [{ type: "text", text: `${output}\n${resetLine}` }]], ...after]).readPaths.contaminating, []);
+  // Where the event records stderr apart (real transcripts do), only stderr counts: the CLI writes the
+  // line there, and a file whose last line is those words (`cat log.txt`) reaches stdout.
+  const withStreams = (stdout, stderr) => {
+    const events = [{ type: "system", subtype: "init", cwd, session_id: "sid" }];
+    [write, [cdTmp, `${stdout}${stderr}`], ...after].forEach(([command, out = ""], i) => {
+      events.push({ type: "assistant", message: { id: `m${i}`, content: [{ type: "tool_use", id: `t${i}`, name: "Bash", input: { command } }] } });
+      events.push({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: `t${i}`, is_error: false, content: out }] }, ...(i === 1 ? { tool_use_result: { stdout, stderr } } : {}) });
+    });
+    return parseTranscript(events, { cwd, tmpEntriesAtStart: new Set(["claude", "notes.md"]), benignRoots: jailOf(cwd) }).readPaths.contaminating;
+  };
+  assert.deepEqual(withStreams(output, `\n${resetLine}`), [], "the real shape: the line in stderr");
+  assert.ok(withStreams(`${output}\n${resetLine}`, "").length > 0, "the same words on stdout move nothing");
+  // The reset applies AFTER its call: the call that carries it ran where the
+  // shell was, and a pre-existing Temp file it read is still caught.
+  assert.deepEqual(run([["cd /tmp"], ["cat notes.md", `x\n${resetLine}`], ...after]).readPaths.contaminating, [tmpPath("notes.md")]);
+
+  // REAL A r1 excerpt (#15, #16 verbatim, then #21, #24, #34). The reset
+  // call itself still flags Temp under the current splitter — its code spans
+  // several lines and each line is judged as a clause run from /tmp — but
+  // nothing AFTER it may add to that. Strict snapshot, as reclassify judges.
+  const real = [
+    ["node_modules/.bin/pcg schema 2>&1 > /tmp/schema.json; wc -l /tmp/schema.json; node -e \"\nconst s=require('/tmp/schema.json');\nconsole.log(Object.keys(s));\nconsole.log(JSON.stringify(s.properties ? s.properties : s, null, 2).slice(0,3000));\n\"\n", "", true],
+    ["cd /tmp && node -e \"\nconst s=require('./schema.json');\nconsole.log(Object.keys(s.properties));\nconsole.log(JSON.stringify(s.properties.outputs,null,2));\nconsole.log(JSON.stringify(s.properties.nodes,null,2).slice(0,2000));\n\"\n", `{\n  "items": {\n    "$ref": "#/$defs/node"\n  },\n  "type": "array"\n}\n${resetLine}`],
+  ];
+  const own = run(real, null).readPaths.contaminating;
+  const realReset = run([...real, ...after], null);
+  assert.deepEqual(realReset.readPaths.contaminating, own, "the calls after the reset add nothing");
+  assert.ok(!realReset.outsideWrites.includes(tmpPath("render.png")));
+  const realStays = run([...real.map(([c, o, e]) => [c, o.replace(`\n${resetLine}`, ""), e]), ...after], null);
+  assert.ok(realStays.readPaths.contaminating.length > own.length, "without the line, the later calls are judged in Temp");
+  assert.ok(realStays.outsideWrites.includes(tmpPath("render.png")));
+});
+
+test("find with -maxdepth 0 and no action names its starting point and reads nothing", () => {
+  const root = process.platform === "win32" ? "C:\\pcg-eval\\sandboxes" : "/var/tmp/pcg-eval/sandboxes";
+  const cwd = join(root, "pcg-eval-xzPyjN", "project");
+  const parse = (...commands) => parseTranscript(syntheticTranscript(cwd, "sid", commands.map((command) => ({ name: "Bash", input: { command } }))), { cwd, tmpEntriesAtStart: new Set(["claude"]), benignRoots: jailOf(cwd) });
+  const bash = (...commands) => parse(...commands).readPaths.contaminating;
+  const rootPath = process.platform === "win32" ? "msys:/" : "/";
+
+  // facade-ab-B r2's first call, verbatim. At depth 0 find prints `/` itself.
+  const real = parse("find / -maxdepth 0 2>/dev/null; npm ls pcg-ts --all 2>&1 | head -20");
+  assert.deepEqual(real.readPaths.contaminating, []);
+  assert.ok(real.readPaths.outsideSandbox.includes(rootPath), "still recorded, as a benign outside path");
+  assert.deepEqual(bash("find / -maxdepth 0"), []);
+  assert.deepEqual(bash("find -L / -maxdepth 0 -type d -print"), []);
+
+  // NEGATIVE CONTROLS: any descent, any action, or a starting point the shell expands.
+  assert.deepEqual(bash("find / -maxdepth 1 2>/dev/null; npm ls pcg-ts --all 2>&1 | head -20"), [rootPath], "-maxdepth 1 lists the root");
+  assert.deepEqual(bash("find / -maxdepth 0 -delete 2>/dev/null"), [rootPath], "-delete is an action");
+  assert.deepEqual(bash("find / -maxdepth 1"), [rootPath]);
+  assert.deepEqual(bash("find / -maxdepth 0 -delete"), [rootPath]);
+  assert.deepEqual(bash("find / -maxdepth 0 -exec ls {} +"), [rootPath]);
+  assert.deepEqual(bash("find / -maxdepth 0 -fprint out.txt"), [rootPath]);
+  assert.deepEqual(bash("find / -maxdepth 0 -maxdepth 2"), [rootPath], "every depth must be 0");
+  assert.deepEqual(bash("find / -iname pcg-ts.tgz"), [rootPath], "no depth limit at all");
+  assert.equal(bash("find /etc/* -maxdepth 0").length, 1, "the shell lists /etc to expand the glob");
+  // Another path in the same clause is judged as before.
+  assert.equal(bash("find / -maxdepth 0 -newer /etc/passwd").length, 1);
+  // Review repros: each named an outside file's contents with no flag in the first cut of this rule.
+  assert.equal(bash("find <(cat /etc/passwd >&2) -maxdepth 0").length, 1, "process substitution is the shell reading");
+  assert.equal(bash("find /etc/passwd -maxdepth 0 | xargs cat").length, 1, "piped names get opened downstream");
+  assert.equal(bash("find /etc/passwd -maxdepth 0 -print0 | xargs -0 cat").length, 1);
+  assert.equal(bash("find /etc/passwd -maxdepth 0 > list.txt; xargs cat < list.txt").length, 1, "saved names get opened later");
+  const home = homedir().replace(/\\/g, "/");
+  assert.deepEqual(bash(`find ${home} -maxdepth 0`), [], "a starting point other than the root");
+  assert.equal(bash(`find ${home} -maxdepth 0 -newer ${home}/*`).length, 1, "a glob elsewhere in the clause lists the directory");
+  assert.equal(bash("find /etc -maxdepth 0 -empty").length, 1, "-empty reads the directory's entries");
+  assert.equal(bash("C:/Windows/System32/find.exe secret /etc/passwd -maxdepth 0").length, 1, "Windows find.exe is a text search");
+  // `||` is not a pipe: the B r2 shape with a fallback stays clean.
+  assert.deepEqual(bash("find / -maxdepth 0 2>/dev/null || true"), []);
+  // From a foreign directory the bare form names only that directory; any depth lists it.
+  assert.deepEqual(bash("cd ~", "find -maxdepth 0"), []);
+  assert.equal(bash("cd ~", "find . -maxdepth 1").length, 1);
+});
+
+test("QUOTE-AWARE clauses: the shell splits only outside quotes, substitutions and comments", () => {
+  const texts = (c) => shellClauses(c).map((x) => x.text);
+  assert.deepEqual(texts(`echo 'a; b' && echo "c | d"; echo e`), ["echo 'a; b'", 'echo "c | d"', "echo e"]);
+  assert.deepEqual(texts('echo "a \\" ; b"; ls'), ['echo "a \\" ; b"', "ls"], "an escaped quote does not close the string");
+  assert.deepEqual(texts("echo $'it\\'s; x' ; ls"), ["echo $'it\\'s; x'", "ls"], "$'...' takes backslash escapes");
+  assert.deepEqual(texts("echo 'a\\'; ls"), ["echo 'a\\'", "ls"], "single quotes take none");
+  assert.deepEqual(texts("echo a\\;b; ls"), ["echo a\\;b", "ls"], "an escaped separator is literal");
+  assert.deepEqual(texts("# don't split; here\nls"), ["ls"], "a quote in a comment opens nothing");
+  assert.deepEqual(texts("x=$(cd /etc; cat passwd); ls"), ["x=$(cd /etc; cat passwd)", "ls"]);
+  assert.deepEqual(shellClauses("x=$(cd /etc; cat passwd)")[0].subs, ["cd /etc; cat passwd"]);
+  assert.deepEqual(shellClauses('echo "`cd ~; ls`"')[0].subs, ["cd ~; ls"], "a substitution inside double quotes runs");
+  assert.deepEqual(shellClauses("echo '$(cat x)'")[0].subs, [], "...inside single quotes it is text");
+  assert.deepEqual(shellClauses("echo $(( 6 / 2 ))")[0].subs, [], "arithmetic runs nothing");
+  assert.deepEqual(shellClauses("a | b || c").map((c) => c.piped), [true, false, false]);
+  // A line that does not parse falls back to the first splitter, never to fewer clauses.
+  assert.deepEqual(texts('echo "unterminated; cat /etc/passwd'), ['echo "unterminated', "cat /etc/passwd"]);
+  // Review repros. A `#` starts a comment only where bash starts a WORD.
+  assert.deepEqual(texts("echo $(pwd)#; cat /etc/passwd"), ["echo $(pwd)#", "cat /etc/passwd"]);
+  assert.deepEqual(texts("ls foo\\ #; cat /etc/passwd"), ["ls foo\\ #", "cat /etc/passwd"]);
+  assert.deepEqual(texts("echo a\\\n#; cat /etc/passwd"), ["echo a#", "cat /etc/passwd"], "a backslash-newline joins the word");
+  // `$$` is a parameter: the quote after it is a plain one, closed by the next `'`.
+  assert.deepEqual(texts("echo $$'x\\'; cat /etc/passwd #'"), ["echo $$'x\\'", "cat /etc/passwd"]);
+  // A substitution inside arithmetic still runs.
+  assert.deepEqual(shellClauses("echo $(( 1 + $(cd ~; cat .bashrc | wc -l) ))")[0].subs, ["cd ~; cat .bashrc | wc -l"]);
+  // A line nested past the stack falls back instead of throwing.
+  assert.ok(Array.isArray(shellClauses("echo " + '"$('.repeat(20000))));
+  assert.ok(Array.isArray(shellClauses("echo " + '"$('.repeat(20000) + "x" + ')"'.repeat(20000))));
+});
+
+test("QUOTE-AWARE inline code is one clause, judged by its literals from where it runs", () => {
+  const root = process.platform === "win32" ? "C:\\pcg-eval\\sandboxes" : "/var/tmp/pcg-eval/sandboxes";
+  const cwd = join(root, "pcg-eval-y0YyXA", "project");
+  // Strict snapshot (every Temp entry pre-dated the run), as reclassify judges.
+  const run = (...commands) => parseTranscript(syntheticTranscript(cwd, "sid", commands.map((command) => ({ name: "Bash", input: { command } }))), { cwd, tmpEntriesAtStart: null, benignRoots: jailOf(cwd) }).readPaths.contaminating;
+  const tmpRoot = process.platform === "win32" ? tmpdir() : "/tmp";
+  const tmpPath = (name) => join(tmpRoot, name);
+  const write = "node_modules/.bin/pcg schema 2>&1 > /tmp/schema.json"; // facade-ab-A r1 #15's own write
+
+  // facade-ab-A r1 #16, #19, #20 verbatim. Split at every newline, each line
+  // of JavaScript was a command run from /tmp: the Temp root, `...densities`,
+  // `Math.floor` and `fieldFn.choose` all read as files there.
+  const a16 = "cd /tmp && node -e \"\nconst s=require('./schema.json');\nconsole.log(Object.keys(s.properties));\nconsole.log(JSON.stringify(s.properties.outputs,null,2));\nconsole.log(JSON.stringify(s.properties.nodes,null,2).slice(0,2000));\n\"\n";
+  const a19 = "cd /tmp && node -e \"\nfunction rnd(){return Math.random();}\nlet minRatio=Infinity,maxRatio=-Infinity, minSpanOk=true, worstSpanX=Infinity, worstSpanZ=Infinity, worstTotal=Infinity, worstColSpreadRatio=Infinity;\nfor(let trial=0; trial<200000; trial++){\n  const W = 34+rnd()*(46-34);\n  const D = 30+rnd()*(42-30);\n  const c = 7+rnd()*(10-7);\n  const H = 10+rnd()*(14-10);\n  const lengths = [W, D-c, c*Math.SQRT2, W-c, D];\n  // checks\n  const spanX = W; // x range 0..W\n  const spanZ = D;\n  worstSpanX = Math.min(worstSpanX, spanX);\n  worstSpanZ = Math.min(worstSpanZ, spanZ);\n  let total=0;\n  let densities=[];\n  for(const L of lengths){\n    if(L<8){ console.log('WALL TOO SHORT', L, {W,D,c}); }\n    const columns = Math.max(2, Math.floor(L/3+0.5));\n    const winCount = columns*3;\n    total+=winCount;\n    densities.push(columns/L);\n    const marginCol=1.2;\n    const span = L-2*marginCol;\n    const spreadRatio = span/L; // first to last distance / length approx since cols spread across span\n    worstColSpreadRatio = Math.min(worstColSpreadRatio, spreadRatio);\n    if (columns<2) console.log('cols<2');\n  }\n  worstTotal = Math.min(worstTotal, total);\n  const mn = Math.min(...densities), mx = Math.max(...densities);\n  const ratio = mx/mn;\n  minRatio = Math.min(minRatio, ratio);\n  maxRatio = Math.max(maxRatio, ratio);\n}\nconsole.log({minRatio,maxRatio, worstSpanX, worstSpanZ, worstTotal, worstColSpreadRatio});\n\"\n";
+  const a20 = "cd /tmp && node -e \"\nconst s=require('./schema.json');\nconsole.log(JSON.stringify(s.\\$defs['fieldFn.choose'],null,2));\nconsole.log(JSON.stringify(s.\\$defs['fieldFn.randomFrom'],null,2));\nconsole.log(JSON.stringify(s.\\$defs['fieldFn.vec'],null,2));\nconsole.log(JSON.stringify(s.\\$defs['fieldFn.component'],null,2));\n\"\n";
+  assert.deepEqual(run(write, a16), [], "#16 reads back the run's own /tmp/schema.json");
+  assert.deepEqual(run(write, a19), [], "#19 is pure computation");
+  assert.deepEqual(run(write, a20), [], "#20: s.$defs['fieldFn.choose'] indexes an object");
+  // NEGATIVE CONTROLS: the same code still reads what it names, from /tmp.
+  assert.deepEqual(run(a16), [tmpPath("schema.json")], "without the run's own write, ./schema.json was already in Temp");
+  // (Code that loads `fs` from a foreign directory may read it by any name, so the directory counts too.)
+  assert.deepEqual(run(write, a19.replace("console.log({minRatio", "console.log(require('fs').readFileSync('./notes.md','utf8'));\nconsole.log({minRatio")), [tmpRoot, tmpPath("notes.md")]);
+
+  // One line, `;` inside the quotes: the same split cut it in two.
+  assert.deepEqual(run('cd /tmp && node -e "const a=1; console.log(a)"'), []);
+  assert.deepEqual(run("cd /tmp && node -e \"const a=require('fs').readFileSync('./notes.md'); console.log(a)\""), [tmpRoot, tmpPath("notes.md")]);
+  assert.deepEqual(run("cd /tmp && node -e \"console.log(require('fs').readdirSync('.'))\""), [tmpRoot], "'.' is the directory it runs in");
+  assert.deepEqual(run('cd /tmp && node -e "console.log(require(\'fs\').readdirSync(process.cwd()))"'), [tmpRoot], "so is process.cwd()");
+  // Code fed to an interpreter by heredoc, from a foreign directory, is judged the same way.
+  assert.deepEqual(run("cd /tmp && node - <<'EOF'\nconsole.log(require('fs').readFileSync('./notes.md','utf8'))\nEOF"), [tmpRoot, tmpPath("notes.md")]);
+  // A literal module load alone reads only that file.
+  assert.deepEqual(run("cd /tmp && node -e \"console.log(require('./notes.md'))\""), [tmpPath("notes.md")]);
+
+  // estate-ab2-A r1 #16 verbatim: the JS line `find(obj[k], path + '/' + k);`
+  // was a clause of its own, so it read as `find /`.
+  const e16 = "node -e \"\nconst schema = require('./node_modules/pcg-ts/docs/graph.schema.json');\nfunction find(obj, path) {\n  if (typeof obj !== 'object' || obj === null) return;\n  for (const k in obj) {\n    if (k === 'applyRules') console.log(path + '/' + k);\n    find(obj[k], path + '/' + k);\n  }\n}\nfind(schema, '');\n\" 2>&1 | head -50";
+  assert.deepEqual(run(e16), [], "a JS function named find is not find(1)");
+  const rootPath = process.platform === "win32" ? "msys:/" : "/";
+  assert.deepEqual(run(`${e16}; find / -name graph.schema.json 2>/dev/null`), [rootPath], "a real find / beside it still is");
+
+  // NEGATIVE CONTROLS: quoted text handed to a shell is still run as commands.
+  assert.ok(run('bash -c "cd /; cat /etc/passwd"').length > 0);
+  assert.ok(run("node -e \"require('fs').readFileSync('/etc/passwd')\"").length > 0);
+  assert.ok(run("x=$(cat /etc/passwd)").length > 0);
+  assert.ok(run("bash <<'EOF'\ncd /etc\ncat passwd\nEOF").length > 0, "a heredoc into bash that cds out and reads");
+  // ...and the substitution BODY is now a command too: a cd inside one was
+  // invisible when the clause was cut at its `;`.
+  // (`~` and `.npmrc` name nothing on their own, so only following the cd
+  // inside the substitution can catch these.)
+  const npmrc = join(homedir(), ".npmrc");
+  assert.deepEqual(run("x=$(cd ~ && cat .npmrc)"), [npmrc]);
+  assert.deepEqual(run('echo "`cd ~ && cat .npmrc`"'), [npmrc]);
+  assert.deepEqual(run("x=$(cd ~ && cat .npmrc 2>/dev/null; true)"), [npmrc]);
+
+  // Review repros (each one an escape the first cut of this splitter missed).
+  // A code flag counts only before the script: after it, the flags are the script's.
+  assert.ok(run("cd /tmp && node server.js -p 8080").includes(tmpPath("server.js")));
+  assert.ok(run("cd /tmp && node -c secret.js").includes(tmpPath("secret.js")), "node -c checks a FILE");
+  // Code that can reach the filesystem, run from a foreign directory, may read it by any name.
+  assert.deepEqual(run("cd /tmp && node -e \"console.log(require('fs').readdirSync(__dirname))\""), [tmpRoot]);
+  assert.deepEqual(run("cd /tmp && node -e \"console.log(require('fs').readFileSync('notes','utf8'))\""), [tmpRoot, tmpPath("notes")]);
+  // ...including from an ANCESTOR of the sandbox, where the other sandboxes are.
+  assert.ok(run("cd ../.. && python3 -c \"import os; print(os.listdir('pcg-eval-Other'))\"").includes(join(root, "pcg-eval-Other")));
+  // What code hands an IO call or a shell is read or run, wherever the code runs.
+  assert.deepEqual(run("node -e \"console.log(require('fs').readdirSync('/'))\""), [rootPath]);
+  assert.deepEqual(run("node -e \"require('child_process').execSync('ls /')\""), [rootPath]);
+  assert.deepEqual(run("node -e \"require('child_process').execSync('cd ~ && cat .npmrc')\""), [npmrc]);
+  assert.deepEqual(run("cd node_modules && node - <<'EOF'\nconsole.log(require('fs').readdirSync(require('os').homedir()))\nEOF"), [homedir()]);
+  // A quoted shell program handed to a shell of any spelling is still run as commands.
+  assert.deepEqual(run("bash -lc 'ls /'"), [rootPath], "flags before -c");
+  assert.ok(run("bash -lc 'echo hi; cd ../..; cat pcg-eval-Other/project/answer.json'").includes(join(root, "pcg-eval-Other", "project", "answer.json")));
+  assert.deepEqual(run("ssh localhost 'true; cd ~; cat .npmrc'"), [npmrc]);
+  assert.deepEqual(run("echo 'true; cd ~; cat .npmrc' | sh"), [npmrc]);
+  assert.deepEqual(run("eval $'true; cd ~; cat .npmrc'"), [npmrc]);
+  // `eval` runs in THIS shell: its cd moves the clauses after it.
+  assert.deepEqual(run("eval $'cd ~'; cat .npmrc"), [npmrc]);
+  // A `<<` inside a quoted string is the code's shift, not a heredoc that swallows the lines after it.
+  assert.deepEqual(run('node -e "console.log(1 << bits)"\ncd ~\ncat .npmrc'), [npmrc]);
+});
+
+test("QUOTE-AWARE heredoc interpreter is the command in the clause holding the <<", () => {
+  const root = process.platform === "win32" ? "C:\\pcg-eval\\sandboxes" : "/var/tmp/pcg-eval/sandboxes";
+  const cwd = join(root, "pcg-eval-q7rPWD", "project");
+  const run = (command) => parseTranscript(syntheticTranscript(cwd, "sid", [{ name: "Bash", input: { command } }]), { cwd, tmpEntriesAtStart: null, benignRoots: jailOf(cwd) }).readPaths.contaminating;
+  // v2 r2.facade-windows.stripped-all a1 #26 verbatim (its cd is to its own
+  // sandbox). The line starts with `cd`, so the body was taken for shell and
+  // `TAU / N` for the filesystem root.
+  const sandboxShell = process.platform === "win32" ? "/c/pcg-eval/sandboxes/pcg-eval-q7rPWD/project" : cwd;
+  const v26 = "cd /c/pcg-eval/sandboxes/pcg-eval-q7rPWD/project; node - <<'EOF'\nconst fs=require(\"fs\");let s=fs.readFileSync(\"gen.mjs\",\"utf8\");\nconst a=s.indexOf(\"// polar footprint\"), b=s.indexOf(\"const ringP\");\ns=s.slice(0,a)+`// polar footprint: bearings alternate long and short steps around the ring, the seed sets how far\n// each corner leans, plus a little noise; the radius is drawn from the seed too\nconst sgn = F(\"sub\", 1, F(\"mul\", F(\"mod\", { fn: \"index\" }, 2), 2));\nconst lean = F(\"mul\", sgn, F(\"add\", 0.12, F(\"mul\", rnd(\"lean\"), 0.08)));\nconst noise = F(\"mul\", F(\"sub\", F(\"mul\", rnd(\"noise\"), 2), 1), 0.04);\nconst theta = F(\"mul\", F(\"add\", { fn: \"index\" }, F(\"add\", lean, noise)), TAU / N);\nconst radius = F(\"add\", 21, F(\"mul\", rnd(\"radius\"), 5));\n`+s.slice(b);\ns=s.replace('axis: \"+x\"','axis: \"-x\"');\nfs.writeFileSync(\"gen.mjs\",s);\nEOF\nnode gen.mjs && node check.mjs 1 2 3 42 1000 2>&1 | head".replace("/c/pcg-eval/sandboxes/pcg-eval-q7rPWD/project", sandboxShell);
+  assert.deepEqual(run(v26), []);
+  // NEGATIVE CONTROL: the same node body reading a real outside file still flags.
+  assert.ok(run(v26.replace('let s=fs.readFileSync("gen.mjs","utf8");', 'let s=fs.readFileSync("/etc/passwd","utf8");')).length > 0);
+  assert.ok(run(v26.replace("; node - <<'EOF'", "; bash <<'EOF'\ncd /etc && cat passwd")).length > 0, "a heredoc into bash there is still shell");
 });
 
 test("a bare listing is not a read: only an opened file counts", () => {

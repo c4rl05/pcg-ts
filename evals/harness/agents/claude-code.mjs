@@ -394,7 +394,313 @@ function pathLike(token) {
 
 /** Shell segments: a command line split at separators, so each clause is judged on its own. */
 export function commandSegments(command) {
-  return String(command).split(/&&|\|\||[;|\n]/).map((s) => s.trim()).filter(Boolean);
+  return shellClauses(command).map((c) => c.text);
+}
+
+/** The first splitter: every separator character, quoted or not. Kept as the fallback for a line that does not parse. */
+function naiveClauses(command) {
+  const parts = String(command).split(/(&&|\|\||[;|\n])/);
+  const out = [];
+  for (let i = 0; i < parts.length; i += 2) if (parts[i].trim()) out.push({ text: parts[i].trim(), piped: parts[i + 1] === "|", subs: [], quoted: [] });
+  return out;
+}
+
+/**
+ * A command line split into the clauses the SHELL would run: at `;`, `&&`,
+ * `||`, `|` and newlines, but not inside single quotes, double quotes, `$'...'`,
+ * `$(...)` or backticks, and not at a backslash-escaped character. Heredoc
+ * bodies are already lifted out by `splitHeredocs`; comments are dropped,
+ * because a quote in one (`# don't`) would otherwise open a string that runs
+ * to the end of the line.
+ *
+ * Each clause carries `piped` (its stdout feeds the next clause: `|`, not
+ * `||`) and `subs`, the bodies of the command substitutions it contains,
+ * double-quoted ones included, since the shell runs those before the clause,
+ * and `quoted`, the contents of its top-level quoted strings (a quoted
+ * program a command hands to a shell is judged from those).
+ *
+ * The first splitter cut at every separator character, quoted or not, so a
+ * multi-line `node -e "..."` became one "command" per line of JavaScript:
+ * `const s=require('./schema.json')` run from /tmp read as a program run from
+ * a foreign directory (facade-ab-A r1), and a JS line `find(obj[k], path +
+ * '/' + k);` as a disk-wide `find /` (estate-ab2-A r1).
+ *
+ * A line that does not parse (an unterminated quote or substitution) falls
+ * back to that first splitter, so a malformed command is judged at least as
+ * strictly as before.
+ */
+export function shellClauses(command) {
+  try {
+    return parseClauses(String(command ?? ""));
+  } catch {
+    // A pathological line (thousands of nested `"$(`) exhausts the stack: judge it the old way.
+    return naiveClauses(command);
+  }
+}
+
+function parseClauses(s) {
+  const n = s.length;
+  const skipSingle = (j) => {
+    const k = s.indexOf("'", j + 1);
+    return k < 0 ? -1 : k + 1;
+  };
+  const skipAnsi = (j) => {
+    for (let k = j + 2; k < n; k++) {
+      if (s[k] === "\\") k++;
+      else if (s[k] === "'") return k + 1;
+    }
+    return -1;
+  };
+  const skipBacktick = (j, into) => {
+    for (let k = j + 1; k < n; k++) {
+      if (s[k] === "\\") k++;
+      else if (s[k] === "`") {
+        into.push(s.slice(j + 1, k));
+        return k + 1;
+      }
+    }
+    return -1;
+  };
+  const skipDouble = (j, into) => {
+    for (let k = j + 1; k < n; ) {
+      const c = s[k];
+      if (c === "\\") k += 2;
+      else if (c === '"') return k + 1;
+      else if (c === "`") k = skipBacktick(k, into);
+      else if (c === "$" && s[k + 1] === "$") k += 2;
+      else if (c === "$" && s[k + 1] === "(") k = skipSubst(k, into);
+      else k++;
+      if (k < 0) return -1;
+    }
+    return -1;
+  };
+  // `$(...)`, or `$((...))` arithmetic, which runs nothing itself but may hold
+  // a `$(...)` that does. Substitutions nested inside a `$(...)` are found
+  // again when its body is split.
+  const skipSubst = (j, into) => {
+    const arith = s[j + 2] === "(";
+    let depth = 0;
+    for (let k = j + 1; k < n; ) {
+      const c = s[k];
+      if (c === "\\") k += 2;
+      else if (c === "'") k = skipSingle(k);
+      else if (c === "$" && s[k + 1] === "$") k += 2;
+      else if (c === "$" && s[k + 1] === "'") k = skipAnsi(k);
+      else if (c === '"') k = skipDouble(k, []);
+      else if (c === "`") k = skipBacktick(k, []);
+      else if (c === "(") {
+        depth++;
+        k++;
+      } else if (c === ")") {
+        depth--;
+        k++;
+        if (depth === 0) {
+          const body = s.slice(j + 2, k - 1);
+          if (!arith) into.push(body);
+          else for (const c2 of parseClauses(body)) into.push(...c2.subs);
+          return k;
+        }
+      } else k++;
+      if (k < 0) return -1;
+    }
+    return -1;
+  };
+
+  const clauses = [];
+  let cur = "";
+  let subs = [];
+  let quoted = [];
+  // A `#` opens a comment only where a WORD starts: `$(pwd)#`, `a\ #` and `a\<newline>#` are one word.
+  let wordStart = true;
+  const flush = (sep) => {
+    const t = cur.trim();
+    if (t) clauses.push({ text: t, piped: sep === "|", subs, quoted });
+    cur = "";
+    subs = [];
+    quoted = [];
+    wordStart = true;
+  };
+  for (let i = 0; i < n; ) {
+    const c = s[i];
+    if (c === "\\") {
+      // A backslash-newline is removed (the line continues mid-word); any other escaped character is literal.
+      if (s[i + 1] !== "\n") {
+        cur += s.slice(i, i + 2);
+        wordStart = false;
+      }
+      i += 2;
+      continue;
+    }
+    if (c === "$" && s[i + 1] === "$") {
+      cur += "$$";
+      i += 2;
+      wordStart = false;
+      continue;
+    }
+    let k = null;
+    if (c === "'") k = skipSingle(i);
+    else if (c === "$" && s[i + 1] === "'") k = skipAnsi(i);
+    else if (c === '"') k = skipDouble(i, subs);
+    else if (c === "`") k = skipBacktick(i, subs);
+    else if (c === "$" && s[i + 1] === "(") k = skipSubst(i, subs);
+    if (k === -1) return naiveClauses(s);
+    if (k !== null) {
+      const piece = s.slice(i, k);
+      cur += piece;
+      if (c === "'" || c === '"') quoted.push(piece.slice(1, -1));
+      else if (c === "$" && s[i + 1] === "'") quoted.push(piece.slice(2, -1));
+      i = k;
+      wordStart = false;
+      continue;
+    }
+    if (c === "#" && wordStart) {
+      const e = s.indexOf("\n", i);
+      i = e < 0 ? n : e;
+      continue;
+    }
+    if (s.startsWith("&&", i) || s.startsWith("||", i)) {
+      flush(s.slice(i, i + 2));
+      i += 2;
+      continue;
+    }
+    if (c === "|" || c === ";" || c === "\n") {
+      flush(c);
+      i++;
+      continue;
+    }
+    cur += c;
+    i++;
+    wordStart = /[\s&()<>]/.test(c);
+  }
+  flush("");
+  return clauses;
+}
+
+/**
+ * The flags that hand an interpreter CODE on its command line, per
+ * interpreter. `node -c` is `--check` (it reads a FILE), so it is not one.
+ */
+const INLINE_CODE_FLAGS = {
+  node: ["-e", "--eval", "-p", "--print", "-pe"],
+  bun: ["-e", "--eval", "-p", "--print"],
+  python: ["-c"],
+  python3: ["-c"],
+  py: ["-c"],
+  perl: ["-e", "-E"],
+  ruby: ["-e"],
+  php: ["-r"],
+};
+
+/**
+ * The code flag an interpreter clause carries (`-e`, `-c`, ...), or null.
+ * Only BEFORE the first non-flag word: after it come a script and that
+ * script's own arguments, so `node server.js -p 8080` runs a file.
+ */
+export function inlineCodeFlag(verb, words) {
+  const flags = INLINE_CODE_FLAGS[verb];
+  if (!flags) return null;
+  for (let i = 1; i < words.length; i++) {
+    if (flags.includes(words[i])) return words[i];
+    if (!words[i].startsWith("-")) return null;
+  }
+  return null;
+}
+
+/**
+ * The code an inline-interpreter clause runs (`node -e CODE`, `python -c
+ * CODE`), with the shell's quoting removed, and the clause WITHOUT it
+ * (`shell`: the interpreter, its flags and any arguments after the code).
+ * Null when the clause has no such flag.
+ */
+export function inlineCodeOf(clause, flag = null) {
+  const text = String(clause);
+  const esc = (f) => f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const m = (flag ? new RegExp(`(?:^|\\s)${esc(flag)}\\s+`) : /(?:^|\s)-(?:e|c|p|-eval|-print)\s+/).exec(text);
+  if (!m) return null;
+  const at = m.index + m[0].length;
+  const rest = text.slice(at);
+  let code = "";
+  let end = rest.length;
+  if (rest.startsWith("'")) {
+    const k = rest.indexOf("'", 1);
+    end = k < 0 ? rest.length : k + 1;
+    code = rest.slice(1, k < 0 ? undefined : k);
+  } else if (rest.startsWith('"')) {
+    let k = 1;
+    for (; k < rest.length; k++) {
+      if (rest[k] === "\\" && /["\\$`]/.test(rest[k + 1] ?? "")) code += rest[++k];
+      else if (rest[k] === '"') break;
+      else code += rest[k];
+    }
+    end = Math.min(k + 1, rest.length);
+  } else {
+    code = rest.split(/\s/)[0];
+    end = code.length;
+  }
+  return { code, shell: `${text.slice(0, at)} ${rest.slice(end)}` };
+}
+
+/**
+ * Code reads the directory it runs in through these, without naming it:
+ * a listing of the cwd, or a walk/glob from it.
+ */
+const CODE_READS_CWD = /\bprocess\.cwd\s*\(|\bos\.getcwd\s*\(|\bPath\.cwd\s*\(|\bos\.listdir\s*\(\s*\)|\bos\.scandir\s*\(\s*\)|\bos\.walk\s*\(|\bglob(?:Sync)?\s*\(|\bDir\.(?:glob|entries|children)\b|\bopendir\s*\(/;
+
+/**
+ * Code that can reach the filesystem or a shell at all: a file module, a
+ * process module, the script's own location, its arguments, Python's `os` and
+ * `open`. Run from a FOREIGN directory, such code can read it by names no
+ * literal shows (`readFileSync(f)`, `execSync('ls')`, `__dirname`), so the
+ * directory counts as read. Code without any of these (pure computation, or a
+ * `require('./x.json')`, judged by its literal) does not.
+ */
+const CODE_IO = /\brequire\s*\(\s*["'`](?:node:)?(?:fs|fs\/promises|child_process|path|glob|fast-glob|readline)["'`]|\bfrom\s+["'`](?:node:)?(?:fs|fs\/promises|child_process|path|glob)["'`]|\bimport\s*\(\s*["'`](?:node:)?(?:fs|fs\/promises|child_process|path)["'`]|\b__dirname\b|\b__filename\b|\bimport\.meta\b|\bprocess\.(?:chdir|argv)\b|\bDeno\.\w|\bBun\.(?:file|spawn|\$)|\bopen\s*\(|\bos\.\w|\bsubprocess\b|\bpathlib\b|\bshutil\b|\bsys\.argv\b|\bglob\b|\bFile\.\w|\bDir\.\w|\bIO\.\w|\bopendir\b|\bsystem\s*\(/;
+
+/** Code that names the home directory without spelling it. */
+const CODE_NAMES_HOME = /\bhomedir\s*\(|\bPath\.home\s*\(|\bexpanduser\s*\(|\bprocess\.env\.(?:HOME|USERPROFILE)\b|\bos\.environ(?:\.get\s*\(|\[)\s*["'](?:HOME|USERPROFILE)["']|\bENV\[\s*["']HOME["']|\bDir\.home\b/;
+
+/** A literal argument of a call, by the call's name (group 1 = name, 3 = the literal). */
+const callLiteral = (names) => new RegExp(String.raw`(?:^|[^\w$])(${names})\s*\(\s*(["'` + "`" + String.raw`])((?:(?!\2)[^\\\n]|\\.)*)\2`, "g");
+const IO_CALL = callLiteral(String.raw`readFileSync|readFile|readdirSync|readdir|opendirSync|opendir|statSync|lstatSync|stat|lstat|createReadStream|existsSync|accessSync|copyFileSync|open|listdir|scandir|walk|glob|globSync|iterdir|Path|File\.(?:read|open|readlines|foreach)|IO\.(?:read|readlines)`);
+const EXEC_CALL = callLiteral(String.raw`execSync|exec|execFileSync|execFile|spawnSync|spawn|system|popen|getoutput|getstatusoutput|check_output|check_call|subprocess\.run|subprocess\.call|subprocess\.Popen|os\.system|os\.popen`);
+const unescapeLiteral = (t) => t.replace(/\\(.)/g, "$1");
+
+/** The literal paths code hands an IO call, whatever their shape: `'notes'`, `'/'`, `'out\\x.json'`. */
+export function codeIoLiterals(code) {
+  return [...String(code).matchAll(IO_CALL)].map((m) => unescapeLiteral(m[3])).filter((t) => t && !/\$\{/.test(t));
+}
+
+/** The literal command lines code hands a shell: `execSync('ls /')`, `os.system('cat x')`. */
+export function codeShellCommands(code) {
+  return [...String(code).matchAll(EXEC_CALL)].map((m) => unescapeLiteral(m[3])).filter((t) => t && !/\$\{/.test(t));
+}
+
+/**
+ * The string literals in code that could name a file relative to where the
+ * code runs: `'.'`, `./x`, `../x`, a name with a separator or an extension,
+ * or a glob. Not one with whitespace, an escape sequence or an interpolation:
+ * `'x\n'`, `${a}/${b}` and `'%d/%m'` are text, and a path assembled at
+ * runtime cannot be seen anyway. Not a bracketed property key either:
+ * `s.$defs['fieldFn.choose']` (facade-ab-A r1) indexes an object.
+ */
+export function codeRelativeLiterals(file, code) {
+  if (!/\.(?:js|mjs|cjs|ts|mts|cts|py|pl|rb|php)$/i.test(file)) return [];
+  const src = String(code);
+  const out = [];
+  for (const m of src.matchAll(/"((?:[^"\\\n]|\\.)*)"|'((?:[^'\\\n]|\\.)*)'|`((?:[^`\\]|\\.)*)`/g)) {
+    const t = m[1] ?? m[2] ?? m[3];
+    if (!t || /\s|(?<!\\)(?:\\\\)*\\[ntr0]|\$\{|%/.test(t)) continue;
+    if (t !== "." && !/[A-Za-z0-9_]/.test(t)) continue;
+    if (!(t === "." || /^\.\.?[\\/]/.test(t) || /[*?]/.test(t) || pathLike(t))) continue;
+    // `[ 'key' ]`: looked at character by character, so a long program stays linear.
+    let b = m.index - 1;
+    while (b >= 0 && /\s/.test(src[b])) b--;
+    let a = m.index + m[0].length;
+    while (a < src.length && /\s/.test(src[a])) a++;
+    if (src[b] === "[" && src[a] === "]") continue;
+    out.push(unescapeLiteral(t));
+  }
+  return out;
 }
 
 /**
@@ -415,6 +721,73 @@ export function commitShellState(before, after, errored, sandbox) {
   if (isInside(after.cwd, sandbox)) return after;
   if (isInside(before.cwd, sandbox)) return before;
   return after;
+}
+
+/**
+ * The directory Claude Code moved the shell back to after a call, or null.
+ *
+ * When a Bash call's `cd` leaves the directories the session may work in, the
+ * CLI puts the shell back in its working directory once the call ends and
+ * says so as the LAST line of the result:
+ *
+ *   ...stdout\nShell cwd was reset to C:\pcg-eval\sandboxes\pcg-eval-y0YyXA\project
+ *
+ * (in the tool_result content the model sees; the event's
+ * `tool_use_result.stderr` carries it as "\nShell cwd was reset to <dir>").
+ * Seen on CLI 2.1.x in facade-ab-A r1 and brick-ab-A r0, after `cd /tmp && ...`.
+ * Not modelling it kept the tracked shell in /tmp, so every later relative
+ * path (`node build-graph.js`, `--out ./render.png`) was judged in Temp.
+ *
+ * Only the final line counts: the CLI appends it, and a line in the middle of
+ * an output is the command's own text. A command could still print that line
+ * last itself and so move the TRACKED shell; the transcript records nothing
+ * that tells the two apart. The call that printed it is judged before the
+ * reset either way.
+ */
+export function shellCwdReset(text) {
+  // The last line, found without a regex over the whole output (a backtracking one was quadratic on long whitespace).
+  const t = String(text ?? "").trimEnd();
+  const m = /^Shell cwd was reset to (.+)$/.exec(t.slice(t.lastIndexOf("\n") + 1));
+  return m ? m[1].trim() : null;
+}
+
+/** A tool_result's content as text: a string, or its text blocks joined. */
+function toolResultText(content) {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content.map((c) => (c?.type === "text" && typeof c.text === "string" ? c.text : "")).join("\n");
+}
+
+/**
+ * `find` with `-maxdepth 0` and no action: it tests and prints its starting
+ * points THEMSELVES and never descends, so `find / -maxdepth 0` prints `/`
+ * and reads nothing under it (facade-ab-B r2, flagged `msys:/` for exactly
+ * that). Returns the starting-point words such a clause names, or null when
+ * the clause is anything else.
+ *
+ * Narrow on purpose. Off when any depth is not 0 (`-maxdepth 1` lists the
+ * root), when an action could run or write something
+ * (`-exec`/`-execdir`/`-ok`/`-okdir`/`-delete`/`-fprint*`/`-fls`), when
+ * `-files0-from` takes starting points from a file, and when a starting
+ * point is a glob or an expansion (`find /etc/* -maxdepth 0` is a listing of
+ * /etc, done by the shell). Other paths in the clause (`-newer /x`) are
+ * judged as before.
+ */
+export function findStatOnlyStartingPoints(words) {
+  // GNU find only: a Windows `find.exe` named by path is a TEXT search that prints matching lines.
+  if (!["find", "/usr/bin/find", "/bin/find"].includes(words[0] ?? "")) return null;
+  let i = 1;
+  while (i < words.length && /^-[HLP]$/.test(words[i])) i++;
+  const starts = [];
+  while (i < words.length && !/^[-(!]/.test(words[i])) starts.push(words[i++]);
+  const expr = words.slice(i);
+  const depths = expr.flatMap((w, j) => (w === "-maxdepth" ? [expr[j + 1]] : []));
+  if (!depths.length || depths.some((d) => d !== "0")) return null;
+  // `-empty` reads a directory's entries; the rest act or write.
+  if (expr.some((w) => /^-(?:exec|execdir|ok|okdir|delete|fprint|fprint0|fprintf|fls|files0-from|empty)$/.test(w))) return null;
+  // Globs, expansions and process substitution (`<(cat X >&2)`) are the shell reading, not find.
+  if (starts.some((s) => /[*?[\]{}$`~<>()]/.test(s))) return null;
+  return starts.length ? starts : ["."];
 }
 
 /**
@@ -478,29 +851,75 @@ export function heredocName(h) {
   return h?.target ?? HEREDOC_NAMES[h?.interpreter] ?? "heredoc.sh";
 }
 
+/**
+ * Quote state after `text`, starting in `state` (null, "'", '"' or "$'"), and
+ * where an unquoted comment starts (-1 if none). Line-level and deliberately
+ * small: enough to tell a `<<` inside a string from a heredoc.
+ */
+function quoteStateAfter(text, state) {
+  let q = state;
+  for (let k = 0; k < text.length; k++) {
+    const c = text[k];
+    if (q === "'") {
+      if (c === "'") q = null;
+    } else if (q === "$'" || q === '"') {
+      if (c === "\\") k++;
+      else if (c === "'" && q === "$'") q = null;
+      else if (c === '"' && q === '"') q = null;
+    } else if (c === "\\") k++;
+    else if (c === "'") q = "'";
+    else if (c === '"') q = '"';
+    else if (c === "$" && text[k + 1] === "$") k++;
+    else if (c === "$" && text[k + 1] === "'") {
+      q = "$'";
+      k++;
+    } else if (c === "#" && (k === 0 || /[\s;&|()<>]/.test(text[k - 1]))) return { q, comment: k };
+  }
+  return { q, comment: -1 };
+}
+
 export function splitHeredocs(command) {
   const heredocs = [];
   const lines = String(command).split("\n");
   const kept = [];
+  // A `<<` inside a quoted string (`node -e "x << 2"`, which can span lines) is
+  // an operator of the CODE, not a heredoc: taking it for one swallowed every
+  // later line of the command as its body.
+  let q = null;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    const m = /(?<!<)<<(?!<)-?\s*(['"]?)([A-Za-z_][\w-]*)\1/.exec(line);
+    let m = null;
+    for (const c of line.matchAll(/(?<!<)<<(?!<)-?\s*(['"]?)([A-Za-z_][\w-]*)\1/g)) {
+      const st = quoteStateAfter(line.slice(0, c.index), q);
+      if (st.comment >= 0) break;
+      if (st.q === null) {
+        m = c;
+        break;
+      }
+    }
     if (!m) {
+      q = quoteStateAfter(line, q).q;
       kept.push(line);
       continue;
     }
-    const redir = /(?:^|[^<>&0-9])(>>?)\s*("[^"]*"|'[^']*'|[^\s;&|<>]+)/.exec(line.replace(m[0], " "));
+    const rest = `${line.slice(0, m.index)} ${line.slice(m.index + m[0].length)}`;
+    q = quoteStateAfter(rest, q).q;
+    const redir = /(?:^|[^<>&0-9])(>>?)\s*("[^"]*"|'[^']*'|[^\s;&|<>]+)/.exec(rest);
     const target = redir?.[2];
-    const shell = /^\s*(?:\S*[\\/])?(?:bash|sh|zsh|dash|ksh|pwsh|powershell)(?:\.exe)?\b/i.test(line);
+    // The command that EATS the body is the one in the clause holding the
+    // `<<`, not the first word of the line: `cd x; node - <<'EOF'` feeds node
+    // (v2 r2.facade-windows.stripped-all a1 read its JS as shell).
+    const lead = shellClauses(line.slice(0, m.index)).at(-1)?.text ?? "";
+    const shell = /^\s*(?:\S*[\\/])?(?:bash|sh|zsh|dash|ksh|pwsh|powershell)(?:\.exe)?\b/i.test(lead);
     // Which interpreter eats the body decides how to READ it. A heredoc fed
     // to `node` or `python3` is CODE, and scanning code as shell turns every
     // division and every regex literal into a bare `/` — the filesystem root.
-    const interp = /^\s*(?:\S*[\\/])?(node|deno|bun|python3?|py|perl|ruby|php)(?:\.exe)?\b/i.exec(line);
+    const interp = /^\s*(?:\S*[\\/])?(node|deno|bun|python3?|py|perl|ruby|php)(?:\.exe)?\b/i.exec(lead);
     const body = [];
     let j = i + 1;
     for (; j < lines.length && lines[j].trim() !== m[2]; j++) body.push(lines[j]);
     heredocs.push({ target: target ? unquote(target) : null, append: redir?.[1] === ">>", shell, interpreter: interp ? interp[1].toLowerCase() : null, body: body.join("\n") });
-    kept.push(line.replace(m[0], ` __PCGHEREDOC${heredocs.length - 1}__ `));
+    kept.push(`${line.slice(0, m.index)} __PCGHEREDOC${heredocs.length - 1}__ ${line.slice(m.index + m[0].length)}`);
     i = j;
   }
   return { command: kept.join("\n"), heredocs };
@@ -685,9 +1104,23 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
   let shell = { cwd: sandbox, prev: sandbox, stack: [] };
 
   const toolErrors = new Map();
+  // Where the CLI put the shell back after a call (see shellCwdReset).
+  const cwdResets = new Map();
   for (const e of events) {
     if (e?.type !== "user" || !e.message) continue;
-    for (const b of e.message.content ?? []) if (b?.type === "tool_result") toolErrors.set(b.tool_use_id, b.is_error === true);
+    const results = (Array.isArray(e.message.content) ? e.message.content : []).filter((b) => b?.type === "tool_result");
+    for (const b of results) {
+      toolErrors.set(b.tool_use_id, b.is_error === true);
+      // The CLI writes the line to the call's STDERR. Where the event records
+      // stderr separately (`tool_use_result.stderr`, which belongs to its one
+      // result), only that counts, so a file whose last line happens to be
+      // the same words (`cat log.txt`) cannot move the shell. Without it, the
+      // content the model saw is all there is.
+      const tur = e.tool_use_result ?? e.toolUseResult;
+      const stderr = results.length === 1 && tur && typeof tur === "object" && typeof tur.stderr === "string" ? tur.stderr : null;
+      const reset = stderr !== null ? shellCwdReset(stderr) : shellCwdReset(toolResultText(b.content));
+      if (reset) cwdResets.set(b.tool_use_id, reset);
+    }
   }
 
   const resolveArg = (arg, base) => {
@@ -751,6 +1184,38 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
     for (const c of net.commands) contaminating.add(`net:${c}`);
   };
 
+  /**
+   * Code run from a FOREIGN directory (`cd /tmp && node -e ...`, a heredoc
+   * into python there): a relative name in it is read there. Judged by its
+   * string literals, the way a script is, plus the calls that read the cwd
+   * without naming it. An identifier (`Math.floor`, `...densities`) is not a
+   * file, which is what reading the code as shell words assumed.
+   */
+  const foreignCode = (file, code, cwd) => {
+    for (const lit of codeRelativeLiterals(file, code)) {
+      if (tokenPath(lit, cwd, { bareRoot: false })) continue; // absolute and `..` paths: already judged where the code is scanned
+      touch(lit === "." ? cwd : lit, { recursive: true, base: cwd });
+    }
+    if (CODE_READS_CWD.test(code)) touch(cwd, { recursive: true });
+    // Code that can reach the filesystem at all may read the directory by a name no literal shows.
+    if (CODE_IO.test(code)) touch(cwd, { recursive: true });
+  };
+
+  /**
+   * Code an interpreter runs (`node -e`, `python -c`, a heredoc into either),
+   * wherever it runs: the literal paths it hands an IO call are read
+   * (`readdirSync('/')` lists the root), the literal command lines it hands a
+   * shell are commands (`execSync('cd ~ && cat .npmrc')`), and from a foreign
+   * directory it is judged by `foreignCode` too.
+   */
+  const judgeCode = (file, code, state, depth) => {
+    for (const cmd of codeShellCommands(code)) if (depth < 3) scanShell(cmd, depth + 1, { cwd: state.cwd, prev: state.prev, stack: [...state.stack] });
+    for (const lit of codeIoLiterals(code)) touch(lit, { recursive: true, base: state.cwd });
+    // The home directory reached by a call rather than a name (`readdirSync(os.homedir())`, `Path.home()`).
+    if (CODE_IO.test(code) && CODE_NAMES_HOME.test(code)) touch(homedir(), { recursive: true });
+    if (!isInside(state.cwd, sandbox)) foreignCode(file, code, state.cwd);
+  };
+
   /** One shell tool call, clause by clause, following `cd`. */
   /**
    * One shell tool call. Takes and returns the shell's STATE, because the
@@ -766,8 +1231,9 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
     // which would otherwise cut through their quotes.
     const subshells = [];
     const command = split.command
-      .replace(/\beval\s+(?:'([^']*)'|"((?:[^"\\]|\\.)*)")/g, (_, a, b) => a ?? b)
-      .replace(/\b(?:bash|sh|zsh|dash)(?:\.exe)?\s+-c\s+(?:'([^']*)'|"((?:[^"\\]|\\.)*)")/g, (_, a, b) => {
+      .replace(/\beval\s+(?:'([^']*)'|"((?:[^"\\]|\\.)*)"|\$'((?:[^'\\]|\\.)*)')/g, (_, a, b, c) => a ?? b ?? c)
+      // Any flags before the `-c`, combined or not: `bash -lc`, `sh -xc`, `bash --norc -c`.
+      .replace(/\b(?:bash|sh|zsh|dash|ksh|mksh)(?:\.exe)?(?:\s+(?:-[A-Za-z]+|--[\w-]+))*?\s+-[A-Za-z]*c\s+(?:'([^']*)'|"((?:[^"\\]|\\.)*)")/g, (_, a, b) => {
         subshells.push(a ?? b);
         return ` __PCGSUBSHELL${subshells.length - 1}__ `;
       })
@@ -784,9 +1250,13 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
     let prevCwd = startState.prev;
     // A `pushd` inside a subshell must not survive it, so the stack is copied.
     const dirStack = [...(startState.stack ?? [])];
-    for (const rawSeg of commandSegments(command)) {
+    for (const { text: rawSeg, piped, subs, quoted } of shellClauses(command)) {
       const markers = [...rawSeg.matchAll(/__PCGHEREDOC(\d+)__/g)].map((m) => heredocs[Number(m[1])]).filter(Boolean);
       for (const m of rawSeg.matchAll(/__PCGSUBSHELL(\d+)__/g)) if (depth < 3) scanShell(subshells[Number(m[1])] ?? "", depth + 1, { cwd: vcwd, prev: prevCwd, stack: dirStack });
+      // `$(...)` and backticks run first, in a child shell from here: their
+      // commands are judged as commands. The clause keeps their text too, so
+      // what it names is still read the way it always was.
+      for (const body of subs) if (depth < 3) scanShell(body, depth + 1, { cwd: vcwd, prev: prevCwd, stack: dirStack });
       const seg = rawSeg.replace(/__PCGHEREDOC\d+__|__PCGSUBSHELL\d+__/g, " ");
       const { text, targets, appends } = stripRedirects(seg);
       const words = shellWords(text);
@@ -815,6 +1285,8 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
         // A body fed to a shell is a script of shell clauses, cd and all; any other body is a file's content.
         if (h.shell && !h.target && depth < 3) scanShell(h.body, depth + 1, { cwd: vcwd, prev: prevCwd, stack: dirStack });
         else scanScript(heredocName(h), h.body, vcwd);
+        // Code fed straight to an interpreter runs HERE, and is judged as code run here.
+        if (h.interpreter && !h.target && !h.shell) judgeCode(heredocName(h), h.body, { cwd: vcwd, prev: prevCwd, stack: dirStack }, depth);
       }
       const flagless = words.slice(1).filter((x) => !x.startsWith("-"));
       for (const t of targets) touch(t, { write: "create", base: vcwd });
@@ -845,7 +1317,16 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
       }
       // A glob over an outside dir reads everything under it, like a recursive listing.
       // Inline code (`node -e`, `python -c`) can chdir and build paths: its outside paths read like a script's.
-      const inlineCode = /^(?:node|deno|bun|python3?|py|perl|ruby|php)$/.test(verb) && words.some((w) => /^-(?:e|c|p|-eval|-print)$/.test(w));
+      const codeFlag = inlineCodeFlag(/^python\d(?:\.\d+)?$/.test(verb) ? "python3" : verb, words);
+      const inlineCode = codeFlag !== null;
+      const inline = inlineCode ? inlineCodeOf(text, codeFlag) : null;
+      // A quoted string with a separator in it is a shell program when the
+      // command hands it to a shell (`bash -lc '...'`, `ssh host '...'`,
+      // `echo '...' | sh`, `watch '...'`), and the classifier cannot know
+      // which commands do. So it is judged as one, from here, in a child
+      // shell; inline code is not (it is judged as code). The first splitter
+      // got the same coverage by cutting through every quote.
+      if (!inlineCode && depth < 3) for (const qs of quoted) if (/[;&|\n]/.test(qs)) scanShell(qs, depth + 1, { cwd: vcwd, prev: prevCwd, stack: dirStack });
       const recursive = inlineCode || RECURSIVE_SEGMENT.test(text) || /\.\.[\\/]\S*[*?[{]|--recursive|\brecursive\s*:\s*true/.test(text);
       // A bare `/` is the root only as an argument of a filesystem command; elsewhere it divides or splits.
       const bareRoot = /^(?:sudo\s+)?(?:\S*[\\/])?(?:find|ls|dir|tree|du|rg|ag|fd|e?grep|fgrep|Get-ChildItem|gci|cat|cp|tar|zip|stat)\b/i.test(text);
@@ -855,26 +1336,41 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
       // Inline code (`node -e`, `python -c`) writes through fs calls, not
       // through the shell, so its writes are invisible to stripRedirects.
       const codeWrites = scriptWrites(text);
+      // A depth-0 `find` names its starting points and reads nothing: they are recorded like a `cd` target.
+      // Only while what it prints reaches nothing but the terminal: not piped on, not saved to a file.
+      const statOnlyStarts = piped || targets.length || appends.length ? null : findStatOnlyStartingPoints(words);
+      const statOnly = new Set((statOnlyStarts ?? []).map((w) => resolveArg(w, vcwd).toLowerCase()));
       for (const { path, token, glob } of extractCommandPathEntries(text, vcwd, { bareRoot })) {
         const key = String(path).toLowerCase();
         // `echo $HOME`, `echo ~` print a name; they read nothing.
         if (["echo", "printf"].includes(verb) && /^(?:~|\$\{?\w+\}?|%\w+%|\$env:\w+)$/i.test(token)) continue;
         if (writtenHere.has(key) || destHere.has(key)) continue;
+        // A glob elsewhere in the clause is cut back to its directory, which the shell lists to expand it.
+        if (statOnly.has(key) && !glob) {
+          touch(path, { cd: true, base: vcwd });
+          continue;
+        }
         // Inline code (`node -e`, `python -c`) writes through fs calls, not
         // through the shell, so its writes are invisible to stripRedirects.
         if (codeWrites.has(token)) touch(path, { write: "create", base: vcwd });
         else touch(path, { recursive: recursive || glob, content: CONTENT_VERBS.has(verb), nodeEntry: verb === "node" && token === flagless[0] });
       }
+      if (inline) judgeCode(verb.startsWith("py") ? "inline.py" : "inline.js", inline.code, { cwd: vcwd, prev: prevCwd, stack: dirStack }, depth);
       if (!isInside(vcwd, sandbox)) {
         // Outside the sandbox, anything that names a file relative to where the shell is names it THERE,
         // whatever the command (xargs, python, diff, base64, a `$(cat ...)` inside echo).
-        for (const t of commandTokens(text).fine.slice(1)) {
+        // Inline code's own text is judged as code (judgeCode, above); the rest of the clause as shell words.
+        for (const t of commandTokens(inline ? inline.shell : text).fine.slice(1)) {
           if (!pathLike(t) || tokenPath(t, vcwd) || (verb === "node" && t === flagless[0])) continue;
           const key = resolveArg(t, vcwd).toLowerCase();
-          if (writtenHere.has(key) || destHere.has(key)) continue;
+          if (writtenHere.has(key) || destHere.has(key) || statOnly.has(key)) continue;
           touch(t, { recursive: recursive || /[*?]/.test(t), base: vcwd });
         }
-        if (READ_VERBS.has(verb)) {
+        if (statOnlyStarts) {
+          for (const a of statOnlyStarts) touch(a, { cd: true, base: vcwd });
+        } else if (inline && verb === "node") {
+          // `node -e CODE` runs no file: its first argument is the code, judged above.
+        } else if (READ_VERBS.has(verb)) {
           let args = words.slice(1).filter((w) => !w.startsWith("-") && !/^\d+$/.test(w));
           if (verb === "find") args = words.slice(1, (words.slice(1).findIndex((w) => /^[-(!]/.test(w)) + 1 || words.length));
           if (PATTERN_FIRST.has(verb)) args = args.slice(1);
@@ -948,6 +1444,10 @@ export function parseTranscript(events, { cwd, tmpEntriesAtStart = null, benignR
           const cmd = String(input.command ?? "");
           // The shell persists across tool calls, so its state carries over.
           shell = commitShellState(shell, scanShell(cmd, 0, shell), toolErrors.get(block.id) === true, sandbox);
+          // The CLI moved the shell back AFTER this call: the call itself ran
+          // where its own cd put it, and only the calls after it start here.
+          const reset = cwdResets.get(block.id);
+          if (reset) shell = { ...shell, prev: shell.cwd, cwd: resolveArg(reset, sandbox) };
           const net = extractNetworkAttempts(cmd);
           network.push(...net.commands, ...net.urls);
           for (const c of net.commands) contaminating.add(`net:${c}`);
