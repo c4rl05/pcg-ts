@@ -696,27 +696,9 @@
               "id": "halve",
               "type": "splitBox",
               "params": {
-                "axis": "perCell",
-                "axisIndex": {
-                  "fn": "select",
-                  "args": [
-                    {
-                      "fn": "ge",
-                      "args": [
-                        {
-                          "fn": "box",
-                          "name": "sx"
-                        },
-                        {
-                          "fn": "box",
-                          "name": "sz"
-                        }
-                      ]
-                    },
-                    0,
-                    2
-                  ]
-                },
+                "axis": "longest",
+                "longestOf": "xz",
+                "axisIndex": 0,
                 "labels": [
                   "block",
                   "block"
@@ -1548,6 +1530,7 @@
               "type": "splitBox",
               "params": {
                 "axis": "y",
+                "longestOf": "xyz",
                 "axisIndex": 0,
                 "labels": [
                   "floor",
@@ -1610,6 +1593,7 @@
               "type": "splitBox",
               "params": {
                 "axis": "x",
+                "longestOf": "xyz",
                 "axisIndex": 0,
                 "labels": [
                   "",
@@ -1731,6 +1715,7 @@
               "type": "splitBox",
               "params": {
                 "axis": "z",
+                "longestOf": "xyz",
                 "axisIndex": 0,
                 "labels": [
                   "",
@@ -1852,6 +1837,7 @@
               "type": "splitBox",
               "params": {
                 "axis": "y",
+                "longestOf": "xyz",
                 "axisIndex": 0,
                 "labels": [
                   "tier",
@@ -2010,6 +1996,7 @@
               "type": "splitBox",
               "params": {
                 "axis": "y",
+                "longestOf": "xyz",
                 "axisIndex": 0,
                 "labels": [
                   "layer",
@@ -2122,6 +2109,7 @@
               "type": "splitBox",
               "params": {
                 "axis": "perCell",
+                "longestOf": "xyz",
                 "axisIndex": {
                   "fn": "select",
                   "args": [
@@ -2185,27 +2173,9 @@
               "id": "gableEnds",
               "type": "splitBox",
               "params": {
-                "axis": "perCell",
-                "axisIndex": {
-                  "fn": "select",
-                  "args": [
-                    {
-                      "fn": "ge",
-                      "args": [
-                        {
-                          "fn": "box",
-                          "name": "sx"
-                        },
-                        {
-                          "fn": "box",
-                          "name": "sz"
-                        }
-                      ]
-                    },
-                    0,
-                    2
-                  ]
-                },
+                "axis": "longest",
+                "longestOf": "xz",
+                "axisIndex": 0,
                 "labels": [
                   "wall",
                   "roof",
@@ -2241,6 +2211,7 @@
               "type": "splitBox",
               "params": {
                 "axis": "y",
+                "longestOf": "xyz",
                 "axisIndex": 0,
                 "labels": [
                   "layer",
@@ -2353,6 +2324,7 @@
               "type": "splitBox",
               "params": {
                 "axis": "x",
+                "longestOf": "xyz",
                 "axisIndex": 0,
                 "labels": [
                   "",
@@ -2398,6 +2370,7 @@
               "type": "splitBox",
               "params": {
                 "axis": "z",
+                "longestOf": "xyz",
                 "axisIndex": 0,
                 "labels": [
                   "",
@@ -2443,6 +2416,7 @@
               "type": "splitBox",
               "params": {
                 "axis": "y",
+                "longestOf": "xyz",
                 "axisIndex": 0,
                 "labels": [
                   "parapet",
@@ -4190,6 +4164,7 @@
               "type": "splitBox",
               "params": {
                 "axis": "y",
+                "longestOf": "xyz",
                 "axisIndex": 0,
                 "labels": [
                   "storey"
@@ -4266,6 +4241,7 @@
               "type": "splitBox",
               "params": {
                 "axis": "perCell",
+                "longestOf": "xyz",
                 "axisIndex": {
                   "fn": "attribute",
                   "name": "alongAxis"
@@ -5086,7 +5062,13 @@
                 "excludeSelf": false,
                 "hitAttr": "covered",
                 "countAttr": "",
-                "targetAttr": ""
+                "targetAttr": "",
+                "pairQueryAttr": "queryIndex",
+                "pairTargetAttr": "targetIndex",
+                "pairOutwardAttr": "outward",
+                "pairOutAxisAttr": "outAxis",
+                "pairAlongAxisAttr": "alongAxis",
+                "pairAlongSignAttr": "alongSign"
               }
             },
             {
@@ -5194,6 +5176,7 @@
               "type": "splitBox",
               "params": {
                 "axis": "perCell",
+                "longestOf": "xyz",
                 "axisIndex": {
                   "fn": "attribute",
                   "name": "alongAxis"
@@ -5329,6 +5312,7 @@
               "type": "splitBox",
               "params": {
                 "axis": "y",
+                "longestOf": "xyz",
                 "axisIndex": 0,
                 "labels": [
                   "wall",
