@@ -23,17 +23,21 @@ import { type GeometryItem, makeGeometryItem } from "../graph/index.js";
 import { hashCombine, hashFloat } from "../random/index.js";
 import { standardNode } from "./registry.js";
 import { isField, type Column } from "../fields/index.js";
+import { canonicalOneOf } from "../diagnostics/canonical.js";
 import {
   ORIENT_AXES,
   type FieldParam,
   geometryItems,
   orientAxisCode,
   orientQuat,
+  positionView,
   quatFromEulerDeg,
   quatMul,
   readComp,
+  requireFinitePlainParam,
   requireGeometry,
   requireTuple,
+  requireVec3Column,
   resolveOn,
   resolveOnMaybeGpu,
   rotateVec,
@@ -1800,31 +1804,226 @@ function boundsCorner(
   return col;
 }
 
+/**
+ * setBounds' `anchor` values. "corners" writes `boundsMin`/`boundsMax` as
+ * given; the other three build a `size` box at each point's P.
+ */
+const SET_BOUNDS_ANCHORS = ["corners", "center", "baseCenter", "min"] as const;
+
+/**
+ * Per anchor CODE (its index in {@link SET_BOUNDS_ANCHORS}), the fraction of
+ * the box's size that lies BELOW P on each axis: min = P - f * size,
+ * max = P + (1 - f) * size; null for "corners", which reads no P. The code
+ * is decided ONCE from the canonical anchor name, so no param string
+ * reaches the per-point loop or a helper's signature (CLAUDE.md,
+ * Conventions; tests/paramStringComparisons.test.ts).
+ */
+const ANCHOR_BELOW: readonly (readonly [number, number, number] | null)[] = [
+  null, // corners
+  [0.5, 0.5, 0.5], // center
+  [0.5, 0, 0.5], // baseCenter
+  [0, 0, 0], // min
+];
+
+/**
+ * The defaults the way NOT chosen must keep, so a set-but-unread param is
+ * refused. The schema below takes its defaults FROM these, so the two
+ * cannot drift.
+ */
+const CORNER_DEFAULTS = { boundsMin: [0, 0, 0], boundsMax: [1, 1, 1] } as const;
+const SIZE_DEFAULT = [1, 1, 1] as const;
+
+/** Whether a param is exactly the plain vec3 `d` (a field never is). */
+function isPlainVec3(value: unknown, d: readonly number[]): boolean {
+  return (
+    !isField(value) &&
+    Array.isArray(value) &&
+    value.length === 3 &&
+    value[0] === d[0] &&
+    value[1] === d[1] &&
+    value[2] === d[2]
+  );
+}
+
+/** The standard f32 tuple-3 bounds column `name`, (re)created when missing or mistyped. */
+function boundsAttr(set: AttributeSet, name: "boundsMin" | "boundsMax"): Attribute {
+  let attr = set.get(name);
+  if (!attr || attr.type !== "f32" || attr.tupleSize !== 3) {
+    if (attr) set.remove(name);
+    attr = set.add(name, "f32", 3, [0, 0, 0]);
+  }
+  return attr;
+}
+
+/**
+ * setBounds with a P anchor: a `size` box at every point's P, written as
+ * the WORLD box every box node reads. P is read; rot and scale are not, by
+ * the box nodes' own rule (a grammar cell is an axis-aligned world box, and
+ * no rotation survives into one), so a rotated point gets the box an
+ * unrotated one at the same P gets.
+ *
+ * `anchorCode` is the anchor, already decoded (an index into
+ * SET_BOUNDS_ANCHORS, never 0); its name is looked up for messages only.
+ * `size` is a field, or a plain size the caller has already checked and
+ * rounded to f32 — the rounding a field column applies, so a plain size and
+ * the same size as a constant field write the same bytes.
+ */
+function boxesAtPoints(
+  geo: Geometry,
+  anchorCode: number,
+  size: FieldParam | readonly [number, number, number],
+  seed: number,
+): void {
+  const below = ANCHOR_BELOW[anchorCode]!;
+  const n = geo.pointCount;
+  const pos = positionView(geo, "setBounds", "in");
+  const P = pos.data;
+  const stride = pos.stride;
+  // The size resolves against the INPUT, before either corner is written,
+  // on the corners' own terms: a size reading a box name sees the box this
+  // cook was handed.
+  let sizeCol: Column | undefined;
+  let sx = 0;
+  let sy = 0;
+  let sz = 0;
+  if (isField(size)) {
+    const col = requireVec3Column(
+      resolveOn(geo, "point", size, seed, "setBounds", "size"),
+      "setBounds",
+      "size",
+      "point",
+      "a box size per world axis [x, y, z], each a length >= 0",
+    );
+    // A size reading a corner (`attribute("boundsMax", 3)`, box("size"))
+    // can be a zero-copy view of a column written below. No snapshot is
+    // needed, unlike the corners' path: point i reads ITS OWN size before
+    // it writes its own corners, and writes nothing else, so no element is
+    // read after it was overwritten.
+    sizeCol = col;
+  } else {
+    const v = size as readonly number[];
+    sx = v[0];
+    sy = v[1];
+    sz = v[2];
+  }
+  const set = geo.attrs.point;
+  const lo = boundsAttr(set, "boundsMin").writable();
+  const hi = boundsAttr(set, "boundsMax").writable();
+  const [fx, fy, fz] = below;
+  for (let i = 0; i < n; i++) {
+    if (sizeCol !== undefined) {
+      sx = readComp(sizeCol, i, 0);
+      sy = readComp(sizeCol, i, 1);
+      sz = readComp(sizeCol, i, 2);
+      if (sx < 0 || sy < 0 || sz < 0) {
+        throw new Error(
+          `setBounds: param "size" is [${sx}, ${sy}, ${sz}] at point ${i}, with anchor "${SET_BOUNDS_ANCHORS[anchorCode]}" — a box size is a length >= 0 on every axis (0 is a box of no volume there, which is kept). Bound the field, e.g. max(<size>, 0), or fix what it reads.`,
+        );
+      }
+    }
+    const p = i * stride;
+    const o = i * 3;
+    const px = P[p];
+    const py = P[p + 1];
+    const pz = P[p + 2];
+    lo[o] = px - fx * sx;
+    lo[o + 1] = py - fy * sy;
+    lo[o + 2] = pz - fz * sz;
+    hi[o] = px + (1 - fx) * sx;
+    hi[o + 1] = py + (1 - fy) * sy;
+    hi[o + 2] = pz + (1 - fz) * sz;
+  }
+}
+
 /** Stamp the standard boundsMin/boundsMax point attributes. */
 export const setBounds = standardNode<SetBoundsParams, SetBoundsInputs, SetBoundsOutputs>({
   type: "setBounds",
   category: "point op",
   description:
-    "Sets the standard per-point bounds attributes: writes boundsMin and boundsMax (f32 tuple 3, world units) on every point, creating the attributes when missing. Downstream nodes and spawners read these as each point's axis-aligned extent. A GRAMMAR'S FIRST CELL (the box splitBox, shellSplit, placeBox or applyRules starts from) need not come from here: every point a source emits already carries a box, the zero box at the world ORIGIN whatever its P, and offsetBox sizes it directly — `marginMax` [w, h, d] grows it into a w x h x d cell from the origin (how the brick house makes its lot), `margin` [w/2, h/2, d/2] one centred on the origin — and transformBox's `translate` moves it. Use setBounds when it is the two corners you know.",
+    "Sets the standard per-point bounds attributes: writes boundsMin and boundsMax (f32 tuple 3, world units) on every point, creating the attributes when missing. Downstream nodes and spawners read these as each point's axis-aligned extent. TWO WAYS TO SAY THE BOX, chosen by `anchor` once per cook: \"corners\" (the default) writes `boundsMin` and `boundsMax` as given; \"center\", \"baseCenter\" and \"min\" build a `size` box AT EACH POINT'S P — centred on it, STANDING on it (centred in x and z, its min y at P: a block on its lot point), or with its min corner on it. That is how A GRAMMAR'S FIRST CELL is made from points fresh from a sampler or a scatter: splitBox, shellSplit, placeBox, offsetBox, transformBox and applyRules read a cell's box and never its P, and every point a source emits carries the zero box at the world ORIGIN whatever its P, so without a box at P they all start from the origin. pointScatterInBounds -> setBounds anchor \"baseCenter\", size [8, 12, 6] -> splitBox cuts an 8 x 12 x 6 block standing on every scattered point. THE BOX AT P IS A WORLD BOX, axis-aligned, which is how every box node reads boundsMin/boundsMax: P goes INTO the corners, and rot and scale are NOT read, so a rotated or scaled point gets the same box an unrotated one at its P gets (a box from the point's scale is a field: size attribute(\"scale\", 3) * 4). The same two attributes have a second reading, a LOCAL extent in the point's own frame — what copyToPoints carries onto its copies and what boxContact's \"local\" frame maps through P, rot and scale — and a box at P read that way counts P twice: write a local extent with \"corners\" (boundsMin -s/2, boundsMax s/2 for one centred on the point). `size` is a vec3, one number (a cube), or a FIELD resolved per point (three components, or one broadcast to all three), each a length >= 0 — a negative one is refused naming the point. The params the chosen way does not read must stay at their defaults: a corner set under a P anchor, or a size set under \"corners\", is refused rather than silently ignored.",
   inputs: [{ name: "in", kind: "geometry" }],
   outputs: [{ name: "out", kind: "geometry" }],
   params: {
     boundsMin: {
       type: "vec3",
-      default: [0, 0, 0],
+      default: [...CORNER_DEFAULTS.boundsMin],
       acceptsField: true,
       description:
         "Minimum corner written to every point's boundsMin, in world units. As a FIELD it is PER POINT, which is the reading that makes this node worth more than a constant: an extent derived from the point's own `scale`, or from a species attribute, gives every instance the box it actually occupies rather than one box the whole cloud shares. Must evaluate to THREE numbers per point — a scalar is REFUSED rather than broadcast, because broadcasting would quietly hand every point a cube when a box was asked for. Both corners are resolved against the INPUT geometry before either is written, so a field here reading `boundsMax` — or any box name, box(\"hi\") or box(\"size\") — sees the box this cook was HANDED, never one this node produced: `vec(box(\"x0\"), box(\"y0\") + 1, box(\"z0\"))` raises the floor of the incoming box by 1.",
     },
     boundsMax: {
       type: "vec3",
-      default: [1, 1, 1],
+      default: [...CORNER_DEFAULTS.boundsMax],
       acceptsField: true,
       description:
         "Maximum corner written to every point's boundsMax, in world units. As a FIELD it is PER POINT, on the same terms as boundsMin, and refuses a scalar for the same reason. Nothing here checks that max exceeds min: the two are written independently, and a point whose corners cross is a point with an inside-out box, which is what the author asked for and what a downstream reader will see. Independently RESOLVED, too: a field here reading `boundsMin` sees the input's corner rather than the one this cook just wrote, so the two params cannot observe each other in either order. Both corners are standard point attributes, so a field naming one always finds it; a geometry with the column deliberately removed refuses here rather than resolving to a silent zero.",
     },
+    anchor: {
+      type: "enum",
+      enum: [...SET_BOUNDS_ANCHORS],
+      default: "corners",
+      description:
+        'How the box is said. "corners" (the default): `boundsMin` and `boundsMax` are the box, as given; P and `size` are not read. The other three build a `size` box at each point\'s P, in WORLD axes (rot and scale are not read): "center" centres it on P (min = P - size / 2); "baseCenter" centres it in x and z and puts its min y AT P, so the box stands on its point (a building on its lot, a block on a scattered point); "min" puts its min corner at P (min = P, max = P + size). P goes INTO the box, so what these three write is the WORLD box the box nodes read, not a local extent in the point\'s own frame (that one is "corners"). Under those three the corners are not read and must stay at their defaults ([0, 0, 0] and [1, 1, 1]); a corner set there is refused rather than ignored. Decided once per cook.',
+    },
+    size: {
+      type: "vec3",
+      default: [...SIZE_DEFAULT],
+      min: 0,
+      acceptsField: true,
+      description:
+        'The box\'s extent per WORLD axis [x, y, z], in world units, read only when `anchor` is "center", "baseCenter" or "min" — under "corners" it must stay at its default [1, 1, 1], and a size set there is refused rather than ignored. As a FIELD it is resolved PER POINT, three components or one broadcast to all three: vec(4, 3 + randomField("h") * 9, 4) gives every point its own height, attribute("scale", 3) * 4 a box from the point\'s own scale (which the node does not apply by itself). Resolved against the INPUT, so a box name here reads the box the point was handed. A plain value is three lengths or ONE, a cube, as a scalar field is. Each component is a length >= 0: 0 gives a box of no volume on that axis, which is kept; a negative one is refused naming the point, and a non-finite one is refused.',
+    },
   },
   execute({ inputs, params, seed: nodeSeed }) {
+    // ---- the anchor, decided ONCE: canonicalized, then turned into the
+    // fractions below P, so no param string reaches a loop.
+    const anchorName = canonicalOneOf(SET_BOUNDS_ANCHORS, params.anchor);
+    if (anchorName === undefined) {
+      throw new Error(
+        `setBounds: param "anchor" is ${JSON.stringify(params.anchor)}; valid: ${SET_BOUNDS_ANCHORS.join(", ")} — "corners" writes boundsMin/boundsMax as given; "center", "baseCenter" (centred in x and z, min y at P) and "min" (min corner at P) build a \`size\` box at each point's P.`,
+      );
+    }
+    const anchorCode = SET_BOUNDS_ANCHORS.indexOf(anchorName as (typeof SET_BOUNDS_ANCHORS)[number]);
+    if (ANCHOR_BELOW[anchorCode] !== null) {
+      // A P anchor: the corners are not read, so a corner set here is
+      // refused rather than ignored.
+      for (const name of ["boundsMin", "boundsMax"] as const) {
+        if (!isPlainVec3(params[name], CORNER_DEFAULTS[name])) {
+          throw new Error(
+            `setBounds: param "${name}" is set (${isField(params[name]) ? "a field" : JSON.stringify(params[name])}), but "anchor" is "${anchorName}", which builds each box from "size" at the point's P and never reads the corners. Remove "${name}" (its default is ${JSON.stringify(CORNER_DEFAULTS[name])}) and give the box's extent as "size", or set "anchor" to "corners" to write the two corners as given.`,
+          );
+        }
+      }
+      let size: FieldParam | readonly [number, number, number] = params.size;
+      if (!isField(size)) {
+        const plain = typeof size === "number" ? [size, size, size] : size;
+        if (!Array.isArray(plain) || plain.length !== 3) {
+          throw new Error(
+            `setBounds: param "size" is ${JSON.stringify(size)}; it is three lengths [x, y, z] (e.g. [8, 12, 6]), one length for a cube, or a field resolved per point.`,
+          );
+        }
+        requireFinitePlainParam(size, "setBounds", "size", "A size is a finite length >= 0 per world axis, e.g. [8, 12, 6].");
+        for (let a = 0; a < 3; a++) {
+          if (plain[a] < 0) {
+            throw new Error(
+              `setBounds: param "size" ${typeof size === "number" ? "" : `component ${a} (${"xyz"[a]}) `}is ${plain[a]} — a box size is a length >= 0 on every axis (0 is a box of no volume there, which is kept). The anchor, not the sign of the size, says which side of P the box is on: with anchor "${anchorName}" give the length, and use "center" or move P for a box that reaches below it.`,
+            );
+          }
+        }
+        // Rounded to f32 here, as a field column is, so a plain size and
+        // the same size as constant(...) write the same bytes.
+        size = [Math.fround(plain[0]), Math.fround(plain[1]), Math.fround(plain[2])];
+      }
+      const geo = deriveGeometry(requireGeometry(inputs, "in", "setBounds"));
+      boxesAtPoints(geo, anchorCode, size, nodeSeed);
+      return { out: [makeGeometryItem(geo)] };
+    }
+    if (!isPlainVec3(params.size, SIZE_DEFAULT)) {
+      throw new Error(
+        `setBounds: param "size" is set (${isField(params.size) ? "a field" : JSON.stringify(params.size)}), but "anchor" is "corners", which writes boundsMin/boundsMax as given and never reads it. To build a size box at each point's P, set "anchor" to "center", "baseCenter" (min y at P) or "min" (min corner at P); otherwise remove "size" (its default is [1, 1, 1]).`,
+      );
+    }
+
     const geo = deriveGeometry(requireGeometry(inputs, "in", "setBounds"));
     const set = geo.attrs.point;
     const corners = [
@@ -1855,11 +2054,7 @@ export const setBounds = standardNode<SetBoundsParams, SetBoundsInputs, SetBound
       return aliases ? col.data.slice() : col.data;
     });
     corners.forEach(([name, value], k) => {
-      let attr = set.get(name);
-      if (!attr || attr.type !== "f32" || attr.tupleSize !== 3) {
-        if (attr) set.remove(name);
-        attr = set.add(name, "f32", 3, [0, 0, 0]);
-      }
+      const attr = boundsAttr(set, name);
       const src = resolved[k];
       // A plain corner still goes through `fill`: same bytes, and it does
       // not pay for a resolved column to write one repeated value.

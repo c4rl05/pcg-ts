@@ -16,8 +16,9 @@
  * cell, once per axis inside a `select`. Here the placement is said once,
  * per axis, and the node does the corner arithmetic.
  *
- * WHY IT IS NOT setBounds. setBounds writes two corners, and a corner is
- * the right thing to write when the box is known in world terms. A
+ * WHY IT IS NOT setBounds. setBounds writes a box known in WORLD terms —
+ * two corners, or (its `anchor`) a size at the point's P, which reads no
+ * box at all and is how a grammar's first cell is made. A
  * placement is a different parameterization of the same box — relative to
  * the box the cell already has, in that box's frame — and folding a second
  * parameterization into setBounds behind a mode flag would give one node

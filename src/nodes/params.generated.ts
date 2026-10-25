@@ -6045,6 +6045,41 @@ export interface SetBoundsParams {
    * @defaultValue `[1,1,1]`
    */
   boundsMax: FieldParam;
+  /**
+   * How the box is said. "corners" (the default): `boundsMin` and `boundsMax` are the box,
+   * as given; P and `size` are not read. The other three build a `size` box at each point's
+   * P, in WORLD axes (rot and scale are not read): "center" centres it on P (min = P - size
+   * / 2); "baseCenter" centres it in x and z and puts its min y AT P, so the box stands on
+   * its point (a building on its lot, a block on a scattered point); "min" puts its min
+   * corner at P (min = P, max = P + size). P goes INTO the box, so what these three write is
+   * the WORLD box the box nodes read, not a local extent in the point's own frame (that one
+   * is "corners"). Under those three the corners are not read and must stay at their
+   * defaults ([0, 0, 0] and [1, 1, 1]); a corner set there is refused rather than ignored.
+   * Decided once per cook.
+   *
+   * - Enum: `"corners"` | `"center"` | `"baseCenter"` | `"min"`
+   *
+   * @defaultValue `"corners"`
+   */
+  anchor: "corners" | "center" | "baseCenter" | "min";
+  /**
+   * The box's extent per WORLD axis [x, y, z], in world units, read only when `anchor` is
+   * "center", "baseCenter" or "min" — under "corners" it must stay at its default [1, 1, 1],
+   * and a size set there is refused rather than ignored. As a FIELD it is resolved PER
+   * POINT, three components or one broadcast to all three: vec(4, 3 + randomField("h") * 9,
+   * 4) gives every point its own height, attribute("scale", 3) * 4 a box from the point's
+   * own scale (which the node does not apply by itself). Resolved against the INPUT, so a
+   * box name here reads the box the point was handed. A plain value is three lengths or ONE,
+   * a cube, as a scalar field is. Each component is a length >= 0: 0 gives a box of no
+   * volume on that axis, which is kept; a negative one is refused naming the point, and a
+   * non-finite one is refused.
+   *
+   * - Range: `>= 0`
+   * - Accepts a field.
+   *
+   * @defaultValue `[1,1,1]`
+   */
+  size: FieldParam;
 }
 
 /**

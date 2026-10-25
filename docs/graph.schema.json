@@ -8267,11 +8267,22 @@
             ]
           },
           "then": {
-            "description": "Sets the standard per-point bounds attributes: writes boundsMin and boundsMax (f32 tuple 3, world units) on every point, creating the attributes when missing. Downstream nodes and spawners read these as each point's axis-aligned extent. A GRAMMAR'S FIRST CELL (the box splitBox, shellSplit, placeBox or applyRules starts from) need not come from here: every point a source emits already carries a box, the zero box at the world ORIGIN whatever its P, and offsetBox sizes it directly — `marginMax` [w, h, d] grows it into a w x h x d cell from the origin (how the brick house makes its lot), `margin` [w/2, h/2, d/2] one centred on the origin — and transformBox's `translate` moves it. Use setBounds when it is the two corners you know.",
+            "description": "Sets the standard per-point bounds attributes: writes boundsMin and boundsMax (f32 tuple 3, world units) on every point, creating the attributes when missing. Downstream nodes and spawners read these as each point's axis-aligned extent. TWO WAYS TO SAY THE BOX, chosen by `anchor` once per cook: \"corners\" (the default) writes `boundsMin` and `boundsMax` as given; \"center\", \"baseCenter\" and \"min\" build a `size` box AT EACH POINT'S P — centred on it, STANDING on it (centred in x and z, its min y at P: a block on its lot point), or with its min corner on it. That is how A GRAMMAR'S FIRST CELL is made from points fresh from a sampler or a scatter: splitBox, shellSplit, placeBox, offsetBox, transformBox and applyRules read a cell's box and never its P, and every point a source emits carries the zero box at the world ORIGIN whatever its P, so without a box at P they all start from the origin. pointScatterInBounds -> setBounds anchor \"baseCenter\", size [8, 12, 6] -> splitBox cuts an 8 x 12 x 6 block standing on every scattered point. THE BOX AT P IS A WORLD BOX, axis-aligned, which is how every box node reads boundsMin/boundsMax: P goes INTO the corners, and rot and scale are NOT read, so a rotated or scaled point gets the same box an unrotated one at its P gets (a box from the point's scale is a field: size attribute(\"scale\", 3) * 4). The same two attributes have a second reading, a LOCAL extent in the point's own frame — what copyToPoints carries onto its copies and what boxContact's \"local\" frame maps through P, rot and scale — and a box at P read that way counts P twice: write a local extent with \"corners\" (boundsMin -s/2, boundsMax s/2 for one centred on the point). `size` is a vec3, one number (a cube), or a FIELD resolved per point (three components, or one broadcast to all three), each a length >= 0 — a negative one is refused naming the point. The params the chosen way does not read must stay at their defaults: a corner set under a P anchor, or a size set under \"corners\", is refused rather than silently ignored.",
             "properties": {
               "params": {
                 "additionalProperties": false,
                 "properties": {
+                  "anchor": {
+                    "default": "corners",
+                    "description": "How the box is said. \"corners\" (the default): `boundsMin` and `boundsMax` are the box, as given; P and `size` are not read. The other three build a `size` box at each point's P, in WORLD axes (rot and scale are not read): \"center\" centres it on P (min = P - size / 2); \"baseCenter\" centres it in x and z and puts its min y AT P, so the box stands on its point (a building on its lot, a block on a scattered point); \"min\" puts its min corner at P (min = P, max = P + size). P goes INTO the box, so what these three write is the WORLD box the box nodes read, not a local extent in the point's own frame (that one is \"corners\"). Under those three the corners are not read and must stay at their defaults ([0, 0, 0] and [1, 1, 1]); a corner set there is refused rather than ignored. Decided once per cook.",
+                    "enum": [
+                      "corners",
+                      "center",
+                      "baseCenter",
+                      "min"
+                    ],
+                    "type": "string"
+                  },
                   "boundsMax": {
                     "anyOf": [
                       {
@@ -8313,6 +8324,28 @@
                       0
                     ],
                     "description": "Minimum corner written to every point's boundsMin, in world units. As a FIELD it is PER POINT, which is the reading that makes this node worth more than a constant: an extent derived from the point's own `scale`, or from a species attribute, gives every instance the box it actually occupies rather than one box the whole cloud shares. Must evaluate to THREE numbers per point — a scalar is REFUSED rather than broadcast, because broadcasting would quietly hand every point a cube when a box was asked for. Both corners are resolved against the INPUT geometry before either is written, so a field here reading `boundsMax` — or any box name, box(\"hi\") or box(\"size\") — sees the box this cook was HANDED, never one this node produced: `vec(box(\"x0\"), box(\"y0\") + 1, box(\"z0\"))` raises the floor of the incoming box by 1."
+                  },
+                  "size": {
+                    "anyOf": [
+                      {
+                        "items": {
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      {
+                        "$ref": "#/$defs/fieldSpec"
+                      }
+                    ],
+                    "default": [
+                      1,
+                      1,
+                      1
+                    ],
+                    "description": "The box's extent per WORLD axis [x, y, z], in world units, read only when `anchor` is \"center\", \"baseCenter\" or \"min\" — under \"corners\" it must stay at its default [1, 1, 1], and a size set there is refused rather than ignored. As a FIELD it is resolved PER POINT, three components or one broadcast to all three: vec(4, 3 + randomField(\"h\") * 9, 4) gives every point its own height, attribute(\"scale\", 3) * 4 a box from the point's own scale (which the node does not apply by itself). Resolved against the INPUT, so a box name here reads the box the point was handed. A plain value is three lengths or ONE, a cube, as a scalar field is. Each component is a length >= 0: 0 gives a box of no volume on that axis, which is kept; a negative one is refused naming the point, and a non-finite one is refused."
                   }
                 },
                 "type": [

@@ -17,7 +17,7 @@ import {
   randomField,
   vec,
 } from "../fields/index.js";
-import { Graph, makeGeometryItem } from "../graph/index.js";
+import { Graph, cook, makeGeometryItem } from "../graph/index.js";
 import {
   copyToPoints,
   type CopyToPointsParams,
@@ -30,12 +30,14 @@ import {
   mergePrimitives,
   orientAlongVector,
   pointGrid,
+  pointScatterInBounds,
   serializeGraph,
   setBounds,
+  splitBox,
   surfaceSample,
   transformPoints,
 } from "./index.js";
-import { rotateVec } from "./util.js";
+import { quatFromEulerDeg, rotateVec } from "./util.js";
 import {
   firstGeo,
   permutePoints,
@@ -2003,6 +2005,187 @@ describe("setBounds", () => {
     );
     expect(geo.attrs.point.require("boundsMin").getTuple(0)).toEqual([3, 4, 5]);
     expect(geo.attrs.point.require("boundsMax").getTuple(0)).toEqual([7, 8, 9]);
+  });
+});
+
+describe("setBounds: a size box at each point's P (anchor)", () => {
+  // Every expectation is f32-exact and written out by hand from P, the
+  // size and the anchor's rule, never recorded from a run.
+  const box = (geo: ReturnType<typeof cloudAt>, i: number): [number[], number[]] => [
+    geo.attrs.point.require("boundsMin").getTuple(i),
+    geo.attrs.point.require("boundsMax").getTuple(i),
+  ];
+  const run = async (input: ReturnType<typeof cloudAt>, params: Record<string, unknown>) =>
+    firstGeo((await runNode(setBounds, params as never, { in: [makeGeometryItem(input)] })).out);
+  const two = (): ReturnType<typeof cloudAt> => cloudAt([[5, 7, 9], [-2.5, 0, 1]]);
+
+  it.each([
+    // anchor, point 0's box, point 1's box -- size [4, 2, 6] throughout
+    ["center", [[3, 6, 6], [7, 8, 12]], [[-4.5, -1, -2], [-0.5, 1, 4]]],
+    ["baseCenter", [[3, 7, 6], [7, 9, 12]], [[-4.5, 0, -2], [-0.5, 2, 4]]],
+    ["min", [[5, 7, 9], [9, 9, 15]], [[-2.5, 0, 1], [1.5, 2, 7]]],
+  ] as const)("anchor %s places the size box on P by its rule", async (anchor, b0, b1) => {
+    const geo = await run(two(), { anchor, size: [4, 2, 6] });
+    expect(box(geo, 0)).toEqual(b0);
+    expect(box(geo, 1)).toEqual(b1);
+    // Only the box changes: P is read, never moved.
+    expect(positionsOf(geo)).toEqual([[5, 7, 9], [-2.5, 0, 1]]);
+  });
+
+  it("the default anchor is still the two corners, P unread", async () => {
+    const geo = await run(two(), { boundsMin: [-1, -2, -3], boundsMax: [4, 5, 6] });
+    expect(box(geo, 0)).toEqual([[-1, -2, -3], [4, 5, 6]]);
+    expect(box(geo, 1)).toEqual([[-1, -2, -3], [4, 5, 6]]);
+    expect(setBounds.defaultParams).toMatchObject({ anchor: "corners", size: [1, 1, 1] });
+  });
+
+  it("a size of 0 on an axis is a box of no volume there, kept", async () => {
+    const geo = await run(two(), { anchor: "baseCenter", size: [4, 0, 6] });
+    expect(box(geo, 0)).toEqual([[3, 7, 6], [7, 7, 12]]);
+    expect(geo.pointCount).toBe(2);
+  });
+
+  it("is a WORLD box: rot and scale are not read, so a rotated, scaled point gets the plain point's box", async () => {
+    // What splitBox and shellSplit read is the stored world box; they turn
+    // nothing by rot. So the answer for a turned point must be the
+    // axis-aligned box at its P -- the same bytes an unturned point gets.
+    const plain = cloudAt([[5, 7, 9]]);
+    const turned = cloudAt([[5, 7, 9]]);
+    turned.attrs.point.require("rot").setTuple(0, quatFromEulerDeg([0, 0, 0, 1], 0, 45, 0));
+    turned.attrs.point.require("scale").setTuple(0, [2, 3, 4]);
+    const a = await run(plain, { anchor: "center", size: [4, 2, 6] });
+    const b = await run(turned, { anchor: "center", size: [4, 2, 6] });
+    expect(box(b, 0)).toEqual([[3, 6, 6], [7, 8, 12]]);
+    expect(box(b, 0)).toEqual(box(a, 0));
+    // rot and scale ride through untouched.
+    expect(b.attrs.point.require("scale").getTuple(0)).toEqual([2, 3, 4]);
+    expect(b.attrs.point.require("rot").getTuple(0)).toEqual(turned.attrs.point.require("rot").getTuple(0));
+    // CONTROL: the comparison can report a difference -- another P moves the box.
+    const moved = await run(cloudAt([[6, 7, 9]]), { anchor: "center", size: [4, 2, 6] });
+    expect(box(moved, 0)).not.toEqual(box(a, 0));
+  });
+
+  it("takes a per-point size as a field, and a scalar field as a cube", async () => {
+    // Each point's x extent is its own P.x: one cook, two sizes.
+    const input = cloudAt([[1, 0, 0], [3, 0, 0]]);
+    const geo = await run(input, { anchor: "min", size: vec(component(position(), 0), 1, 2) });
+    expect(box(geo, 0)).toEqual([[1, 0, 0], [2, 1, 2]]);
+    expect(box(geo, 1)).toEqual([[3, 0, 0], [6, 1, 2]]);
+    const cube = await run(input, { anchor: "center", size: constant(2) });
+    expect(box(cube, 0)).toEqual([[0, -1, -1], [2, 1, 1]]);
+  });
+
+  it("a constant field size writes the plain size's bytes, f32-INEXACT sizes included", async () => {
+    // A field resolves into an f32 column, so the plain size is rounded to
+    // f32 before the arithmetic too. Without that, 0.1 / 0.7 / 1.3 used in
+    // f64 put "center"'s min one f32 ulp away from the field's on some
+    // points -- which f32-exact sizes cannot show, hence these values.
+    const scatter = firstGeo(
+      (await runNode(pointScatterInBounds, { count: 16, boundsMin: [-7, -7, -7], boundsMax: [7, 7, 7] })).out,
+    );
+    const both = async (size: unknown) => {
+      const g = await run(scatter, { anchor: "center", size });
+      return [Array.from(g.attrs.point.require("boundsMin").data), Array.from(g.attrs.point.require("boundsMax").data)];
+    };
+    expect(await both(constant([0.1, 0.7, 1.3]))).toEqual(await both([0.1, 0.7, 1.3]));
+    // CONTROL: a different size must compare different.
+    expect(await both([0.1, 0.7, 1.3])).not.toEqual(await both([0.1, 0.7, 1.4]));
+  });
+
+  it("a plain single number is a cube, as a scalar field is", async () => {
+    const plain = await run(two(), { anchor: "min", size: 2 });
+    expect(box(plain, 0)).toEqual([[5, 7, 9], [7, 9, 11]]);
+    expect(box(plain, 0)).toEqual(box(await run(two(), { anchor: "min", size: constant(2) }), 0));
+    await expect(run(two(), { anchor: "min", size: -2 })).rejects.toThrow(/setBounds: param "size" is -2 — a box size/);
+  });
+
+  it("a size field reads the box the point was HANDED, before either corner is written", async () => {
+    const input = cloudAt([[10, 0, 0]]);
+    input.attrs.point.require("boundsMax").setTuple(0, [2, 3, 4]);
+    const geo = await run(input, { anchor: "min", size: attribute("boundsMax", 3) });
+    expect(box(geo, 0)).toEqual([[10, 0, 0], [12, 3, 4]]);
+  });
+
+  it("refuses a negative size, plain or per point, naming the param and the point", async () => {
+    await expect(run(two(), { anchor: "center", size: [4, -1, 6] })).rejects.toThrow(
+      /setBounds: param "size" component 1 \(y\) is -1 — a box size is a length >= 0/,
+    );
+    // Point 1 is the one whose x is negative.
+    await expect(
+      run(two(), { anchor: "center", size: vec(component(position(), 0), 1, 1) }),
+    ).rejects.toThrow(/setBounds: param "size" is \[-2\.5, 1, 1\] at point 1, with anchor "center"/);
+    await expect(run(two(), { anchor: "center", size: [4, Number.NaN, 6] })).rejects.toThrow(
+      /setBounds: param "size" \(component 1\) is NaN/,
+    );
+  });
+
+  it("refuses a param the chosen way does not read, rather than ignoring it", async () => {
+    await expect(run(two(), { anchor: "baseCenter", boundsMax: [8, 12, 6] })).rejects.toThrow(
+      /setBounds: param "boundsMax" is set \(\[8,12,6\]\), but "anchor" is "baseCenter".*give the box's extent as "size"/,
+    );
+    await expect(run(two(), { anchor: "min", boundsMin: position() })).rejects.toThrow(
+      /param "boundsMin" is set \(a field\), but "anchor" is "min"/,
+    );
+    await expect(run(two(), { size: [8, 12, 6] })).rejects.toThrow(
+      /param "size" is set \(\[8,12,6\]\), but "anchor" is "corners".*"center", "baseCenter" \(min y at P\) or "min"/,
+    );
+    // The defaults spelled out are not "set": an editor that writes every
+    // param explicitly still cooks.
+    const geo = await run(two(), { anchor: "min", size: [1, 2, 3], boundsMin: [0, 0, 0], boundsMax: [1, 1, 1] });
+    expect(box(geo, 0)).toEqual([[5, 7, 9], [6, 9, 12]]);
+  });
+
+  it("refuses an unknown anchor, listing the valid ones", async () => {
+    await expect(run(two(), { anchor: "centre" })).rejects.toThrow(
+      /setBounds: param "anchor" is "centre"; valid: corners, center, baseCenter, min/,
+    );
+  });
+
+  it("scatter -> setBounds baseCenter -> splitBox gives every scattered point its own block, cut in place", async () => {
+    // The chain the anchor exists for. Without it every scattered point
+    // carries the zero box at the world origin and all five blocks would
+    // be cut at [0, 0, 0].
+    const build = (): Graph => {
+      const g = new Graph(11);
+      const scatter = g.add(
+        pointScatterInBounds,
+        { count: 5, boundsMin: [-50, 0, -50], boundsMax: [50, 0, 50] },
+        "scatter",
+      );
+      const lot = g.add(setBounds, { anchor: "baseCenter", size: [8, 12, 6] }, "lot");
+      const floors = g.add(
+        splitBox,
+        { axis: "y", labels: ["floor"], sizes: [3], units: ["repeat"] },
+        "floors",
+      );
+      g.connect(scatter, "out", lot, "in");
+      g.connect(lot, "out", floors, "in");
+      g.output(scatter, "out", "points");
+      g.output(floors, "out", "pieces");
+      return g;
+    };
+    const { outputs } = await cook(build());
+    const points = positionsOf(firstGeo(outputs.points));
+    const pieces = firstGeo(outputs.pieces);
+    expect(points.length).toBe(5);
+    // Five distinct points, none at the origin: the test can fail.
+    expect(new Set(points.map((p) => p.join())).size).toBe(5);
+    expect(pieces.pointCount).toBe(5 * 4);
+    const f = Math.fround;
+    for (let c = 0; c < 5; c++) {
+      const [px, py, pz] = points[c];
+      for (let k = 0; k < 4; k++) {
+        const [lo, hi] = box(pieces, c * 4 + k);
+        expect(lo).toEqual([f(px - 4), f(py + 3 * k), f(pz - 3)]);
+        expect(hi).toEqual([f(px + 4), f(py + 3 * (k + 1)), f(pz + 3)]);
+        expect(pieces.attrs.point.require("piece").getString(c * 4 + k)).toBe("floor");
+      }
+    }
+    // Through JSON (a parsed anchor string) the chain cooks the same bytes.
+    const text = JSON.stringify(serializeGraph(build()));
+    expect(text).toContain('"anchor":"baseCenter"');
+    const back = await cook(deserializeGraph(JSON.parse(text)));
+    expect(snapshotGeometry(firstGeo(back.outputs.pieces))).toEqual(snapshotGeometry(pieces));
   });
 });
 
