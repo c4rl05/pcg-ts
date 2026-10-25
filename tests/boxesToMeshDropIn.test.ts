@@ -11,9 +11,11 @@
  * expression, anchor 0.5, fit "allow" because the 0.01 floor can exceed a
  * sliver) and a boxesToMesh on it.
  *
- * What is pinned, over 20 seeds: the topology and the uv are byte-identical
- * (the layout is meshPrimitive's box laid on each cell, the default faces in
- * its order); every new vertex lies EXACTLY on the placed box's stored faces;
+ * What is pinned, over 20 seeds: the topology is byte-identical (the point
+ * and triangle layout is meshPrimitive's box laid on each cell, the default
+ * faces in its order); the uv is NOT the box primitive's but the face frame
+ * shellSplit writes (u along, v up, unmirrored seen from outside), checked
+ * point by point against the stored box; every new vertex lies EXACTLY on the placed box's stored faces;
  * the tail's vertices, rebuilt as f32(c + s * +-0.5), agree with them to
  * within one f32 ulp, and on some boxes miss them by that ulp (measured:
  * 7056 of 193320 coordinates over seeds 1-20, every one by exactly one
@@ -62,6 +64,16 @@ function geo(c: DataCollection | undefined): Geometry {
   return item.geo;
 }
 
+/** shellSplit's face frame per face code, from its description: [axis, sign] of along and up. */
+const FRAME: Record<number, { along: [number, number]; up: [number, number] }> = {
+  0: { along: [0, 1], up: [2, 1] },
+  1: { along: [0, -1], up: [1, 1] },
+  2: { along: [0, 1], up: [1, 1] },
+  3: { along: [2, 1], up: [1, 1] },
+  4: { along: [2, -1], up: [1, 1] },
+  5: { along: [0, 1], up: [2, -1] },
+};
+
 const f32Ulp = (x: number): number => {
   const a = Math.abs(Math.fround(x));
   if (a === 0) return 2 ** -149;
@@ -81,7 +93,7 @@ async function measure(
   seed: number,
   sizeExpr?: unknown,
   tailToo = false,
-): Promise<Measure & { sameTopology: boolean; sameUv: boolean; tailOffFace: number }> {
+): Promise<Measure & { sameTopology: boolean; uvFrame: boolean; uvChanged: number; tailOffFace: number }> {
   const base = load();
   base.seed = seed;
   if (tailToo) (base.nodes.find((n) => n.id === "size") as { params: { value: unknown } }).params.value = sizeExpr;
@@ -96,15 +108,31 @@ async function measure(
     Array.from(tail.vertexToPoint).join() === Array.from(mesh.vertexToPoint).join() &&
     Array.from(tail.primVertexStart).join() === Array.from(mesh.primVertexStart).join() &&
     Array.from(tail.primVertexCount).join() === Array.from(mesh.primVertexCount).join();
-  const uvA = tail.attrs.point.require("uv").data;
-  const uvB = mesh.attrs.point.require("uv").data;
-  let sameUv = uvA.length >= tail.pointCount * 2;
-  for (let i = 0; i < mesh.pointCount * 2; i++) if (uvA[i] !== uvB[i]) sameUv = false;
-
   const pa = tail.attrs.point.require("P").data;
   const pb = mesh.attrs.point.require("P").data;
   const lo = boxes.attrs.point.require("boundsMin").data;
   const hi = boxes.attrs.point.require("boundsMax").data;
+
+  // The uv is the face frame (u along, v up — shellSplit's), not the box
+  // primitive's: unsubdivided, each component is 1 at the corner the
+  // frame axis runs TO and 0 at the one it runs from.
+  const uvA = tail.attrs.point.require("uv").data;
+  const uvB = mesh.attrs.point.require("uv").data;
+  const side = mesh.attrs.point.require("boxSide").data;
+  let uvFrame = true;
+  let uvChanged = 0;
+  for (let p = 0; p < mesh.pointCount; p++) {
+    const cell = Math.floor(p / 24);
+    const fr = FRAME[side[p]];
+    for (const [c, [axis, sign]] of [fr.along, fr.up].entries()) {
+      const l = lo[cell * 3 + axis];
+      const h = hi[cell * 3 + axis];
+      if (l === h) continue;
+      const atMax = pb[p * 3 + axis] === h;
+      if (uvB[p * 2 + c] !== (sign > 0 ? (atMax ? 1 : 0) : atMax ? 0 : 1)) uvFrame = false;
+    }
+    if (uvA[p * 2] !== uvB[p * 2] || uvA[p * 2 + 1] !== uvB[p * 2 + 1]) uvChanged++;
+  }
   let differ = 0;
   let maxUlps = 0;
   let offFace = 0;
@@ -125,7 +153,7 @@ async function measure(
       }
     }
   }
-  return { points: mesh.pointCount, coords: mesh.pointCount * 3, differ, maxUlps, offFace, tailOffFace, sameTopology, sameUv };
+  return { points: mesh.pointCount, coords: mesh.pointCount * 3, differ, maxUlps, offFace, tailOffFace, sameTopology, uvFrame, uvChanged };
 }
 
 describe("the unshrunk tail (scale = box(\"size\")) against boxesToMesh on the cells themselves", () => {
@@ -147,23 +175,31 @@ describe("the unshrunk tail (scale = box(\"size\")) against boxesToMesh on the c
 });
 
 describe("boxesToMesh drops in for basics-split-box's copyToPoints tail", () => {
-  it("same topology and uv on 20 seeds; every new vertex on its stored box; the tail within one ulp of it", async () => {
+  it("same topology on 20 seeds; every new vertex on its stored box; the tail within one ulp of it; uv the face frame", async () => {
     const rows: string[] = [];
     let totalDiffer = 0;
     let totalCoords = 0;
+    let totalUvChanged = 0;
+    let totalPoints = 0;
     for (let seed = 1; seed <= 20; seed++) {
       const m = await measure(seed);
       expect(m.sameTopology).toBe(true);
-      expect(m.sameUv).toBe(true);
+      expect(m.uvFrame).toBe(true);
       expect(m.offFace).toBe(0);
       expect(m.maxUlps).toBeLessThanOrEqual(1);
       totalDiffer += m.differ;
       totalCoords += m.coords;
-      rows.push(`seed ${seed}: ${m.points} points, ${m.differ}/${m.coords} coordinates differ, max ${m.maxUlps} ulp`);
+      totalUvChanged += m.uvChanged;
+      totalPoints += m.points;
+      rows.push(`seed ${seed}: ${m.points} points, ${m.differ}/${m.coords} coordinates differ, max ${m.maxUlps} ulp, ${m.uvChanged} uv changed`);
     }
     // eslint-disable-next-line no-console
-    console.log(`basics-split-box drop-in:\n${rows.join("\n")}\ntotal ${totalDiffer}/${totalCoords}`);
+    console.log(`basics-split-box drop-in:\n${rows.join("\n")}\ntotal ${totalDiffer}/${totalCoords}; uv changed on ${totalUvChanged}/${totalPoints} points`);
     expect(totalCoords).toBeGreaterThan(0);
+    // The box primitive's uv is mirrored on three sides and upright on two:
+    // the frame uv differs from it on a share of the points, not all.
+    expect(totalUvChanged).toBeGreaterThan(0);
+    expect(totalUvChanged).toBeLessThan(totalPoints);
   }, 60_000);
 
   it("the control: a shrink 0.001 off moves vertices by far more than an ulp", async () => {

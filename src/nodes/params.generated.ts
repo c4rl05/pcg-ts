@@ -715,8 +715,9 @@ export interface BoxesToMeshParams {
    * names: "floor" (min y), "ceiling" (max y), "south" (min z), "north" (max z), "west" (min
    * x), "east" (max x), each at most once and at least one. A side NOT listed is left OPEN:
    * ["south"] is one panel per cell, every side but "floor" a box with no bottom. The
-   * default is meshPrimitive's box order (+x, -x, +y, -y, +z, -z), which makes a cell's
-   * block point for point a unit meshPrimitive box copied onto it. Decided once per cook.
+   * default is meshPrimitive's box order (+x, -x, +y, -y, +z, -z), which gives each cell the
+   * points and triangles of a unit meshPrimitive box copied onto it (the uv follows the face
+   * frame instead; see the description). Decided once per cook.
    *
    * @defaultValue `["east","west","ceiling","floor","north","south"]`
    */

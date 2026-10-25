@@ -14,12 +14,15 @@
  *
  * THE LAYOUT IS meshPrimitive's BOX, cell by cell: per listed face its own
  * grid of points (none shared between faces, so uv seams and flat normals
- * are exact), u fastest then v, two triangles per quad wound to face
- * OUTWARD, uv 0..1 across the face. The default face order is
- * meshPrimitive's (+x, -x, +y, -y, +z, -z), so a cell's block is point for
- * point the unit box copied onto it. The faces are NAMED as shellSplit
- * names a box's sides (floor -y, ceiling +y, south -z, north +z, west -x,
- * east +x), and each point records its side's shellSplit FACE CODE.
+ * are exact), points u fastest then v, two triangles per quad wound to
+ * face OUTWARD. The default face order is meshPrimitive's (+x, -x, +y, -y,
+ * +z, -z), so a cell's points and triangles are the unit box's copied onto
+ * it. The faces are NAMED as shellSplit names a box's sides (floor -y,
+ * ceiling +y, south -z, north +z, west -x, east +x), each point records
+ * its side's shellSplit FACE CODE, and the uv is that face's FRAME — u
+ * along, v up, as shellSplit writes them — so every face reads left to
+ * right and bottom to top seen from outside, unmirrored (the box
+ * primitive's uv mirrors three of its sides and turns u upright on two).
  *
  * WORLD BOXES, as every box node reads them: P, rot and scale are not
  * read. A point whose box is a LOCAL extent turned by `rot` (an instance)
@@ -64,14 +67,22 @@ const AXIS_NAMES = ["x", "y", "z"] as const;
 /** Point attributes of a cell NOT carried: its transform, which this node replaces by baking the box into P. */
 const NOT_CARRIED: ReadonlySet<string> = new Set(["P", "rot", "scale"]);
 
-/** The largest index a Uint32Array topology holds. */
-const MAX_INDEX = 0xffffffff;
+/** The cap on the output's points, summed over every cell: repeatPoints' and splitBox's. */
+const MAX_MESH_POINTS = 1 << 22;
+/**
+ * shellSplit's face frame per face code (along x up = outward): the along
+ * and up axes and their signs. uv follows it, u along and v up, so every
+ * face reads left to right and bottom to top seen from outside it.
+ */
+const ALONG = [0, 0, 0, 2, 2, 0] as const;
+const ALONG_SIGN = [1, -1, 1, 1, -1, 1] as const;
+const UP_SIGN = [1, 1, 1, 1, 1, -1] as const;
 
 /** Every cell's box as mesh faces, cell by cell. */
 export const boxesToMesh = standardNode<BoxesToMeshParams, BoxesToMeshInputs, BoxesToMeshOutputs>({
   type: NODE,
   category: "surface",
-  description: `TURNS every cell's box into MESH FACES, built where the box is: the step from a grammar's cells (splitBox, shellSplit, placeBox, offsetBox, transformBox) to geometry a renderer draws. A CELL IS A POINT WITH A BOX, as in splitBox: its standard \`boundsMin\`/\`boundsMax\`, read as the WORLD box they hold; P, rot and scale are not read, so a ROTATED cell gets the same mesh as an unrotated one. (A point whose box is a LOCAL extent turned by its \`rot\` — an instance, a packBricks brick read through its transform — is a copyToPoints of a unit meshPrimitive box instead.) It replaces the four-node tail P = box("center"), scale = box("size"), a unit meshPrimitive box, copyToPoints topology "keep": that tail REBUILDS each face from a centre and a size, f32(c + s * 0.5), which misses the stored face by an f32 ulp on some boxes (9% of the coordinates of basics-split-box's cells), so two cells that share a face can open or overlap by that ulp there; here every face vertex IS the stored corner coordinate, so two cells that share a face share its plane exactly. THE OUTPUT is one geometry: per cell, in input order, one block per face listed in \`faces\`, in that order; per face its own grid of points (no point shared between faces, so uv seams and flat normals are exact), u fastest then v, and two 3-vertex "poly" triangles per quad — meshPrimitive's box layout exactly: a face normal to world axis a is spanned by u = axis (a + 1) % 3 and v = axis (a + 2) % 3, every triangle is wound counter-clockwise SEEN FROM OUTSIDE the box, \`uv\` (f32 tuple 2) runs 0..1 across each face along u and v, and with the default \`faces\` (meshPrimitive's order +x, -x, +y, -y, +z, -z) a cell's block is point for point a unit meshPrimitive box copied onto it. A closed box is a closed solid: with all six faces, every edge is shared by exactly two triangles once coincident corner points are welded. THE FACES are named by side, shellSplit's names: "floor" min y, "ceiling" max y, "south" min z, "north" max z, "west" min x, "east" max x; a face not listed is left OPEN, so ["south"] alone is a facade panel and every face but "floor" a box with no bottom. \`subdivisions\` cuts each face into a grid of quads (meshPrimitive's param: quads per WORLD axis, a face taking the two that span it), plain or a FIELD resolved per cell — vec(max(floor(box("sx")), 1), 1, 1) gives every box about one column per unit of width. CARRIED: every point attribute of the cell except its transform (P, rot, scale) lands on EVERY point of that cell's mesh, strings included — its colour, its label, its \`seed\` (so a random drawn from the seed is one value per box), its boundsMin/boundsMax (so box names still read the cell's box on its mesh) — together with the detail attributes. Written: P, \`uv\`, a \`normal\` (f32 tuple 3, flat and outward) under \`normals\`, the side's FACE CODE under \`faceAttr\` (i32: shellSplit's codes, 0 floor, 1 south, 2 north, 3 west, 4 east, 5 ceiling, so a material or a filter can pick the top faces, eq(attribute("boxSide"), 5)), and the input cell's index under \`cellAttr\`. A written name the cell also carries is refused rather than overwritten. A box of NO VOLUME on an axis (a plate, a slab of zero height) is KEPT, as every box node keeps it: its two faces across that axis coincide back to back, so it draws from both sides, and the faces along that axis are zero-area triangles (which area-weighted sampling and the raycast mapping skip) — the counts are always cells * the listed faces' grids; list fewer faces to drop them. An inside-out or non-finite box is refused naming the cell. No inset or bevel: shrink a box first with transformBox (about its centre, pivotIn "cell") or offsetBox (by a distance per face), which keeps the box the mesh is built from on the cell as data. Vertex coordinates are the stored f32 corners and, between them, grid line i of n at (min * (n - i) + max * i) / n, rounded to f32 — exact at both ends and wherever a line falls on 0; -0 written +0. CPU only, as every box node: it builds topology whose size depends on each cell's subdivisions, which the GPU's elementwise field kernels do not express. Empty input gives an empty mesh.`,
+  description: `TURNS every cell's box into MESH FACES, built where the box is: the step from a grammar's cells (splitBox, shellSplit, placeBox, offsetBox, transformBox) to geometry a renderer draws. A CELL IS A POINT WITH A BOX, as in splitBox: its standard \`boundsMin\`/\`boundsMax\`, read as the WORLD box they hold; P, rot and scale are not read, so a ROTATED cell gets the same mesh as an unrotated one. (A point whose box is a LOCAL extent turned by its \`rot\` — an instance, a packBricks brick read through its transform — is a copyToPoints of a unit meshPrimitive box instead.) It replaces the four-node tail P = box("center"), scale = box("size"), a unit meshPrimitive box, copyToPoints topology "keep": that tail REBUILDS each face from a centre and a size, f32(c + s * 0.5), which misses the stored face by an f32 ulp on some boxes (9% of the coordinates of basics-split-box's cells), so two cells that share a face can open or overlap by that ulp there; here every face vertex IS the stored corner coordinate, so two cells that share a face share its plane exactly. THE OUTPUT is one geometry: per cell, in input order, one block per face listed in \`faces\`, in that order; per face its own grid of points (no point shared between faces, so uv seams and flat normals are exact), laid in meshPrimitive's box order — a face normal to world axis a is a grid over axis (a + 1) % 3, fastest, then axis (a + 2) % 3 — and two 3-vertex "poly" triangles per quad, every one wound counter-clockwise SEEN FROM OUTSIDE the box; with the default \`faces\` (meshPrimitive's order +x, -x, +y, -y, +z, -z) a cell's points and triangles are those of a unit meshPrimitive box copied onto it. THE UV (f32 tuple 2) IS THE FACE'S FRAME, the one shellSplit writes on a face of that side (along x up = outward): u runs ALONG, v runs UP, each 0..1 across the face, so seen from OUTSIDE every face reads left to right and bottom to top, never mirrored — on a wall up is +y and along is -x on the south, +x north, +z west, -z east; the floor runs along +x and up +z (seen from below), the ceiling along +x and up -z (seen from above). A texture or a uv-driven pattern therefore lands the same way on all four walls, which the box primitive's uv (mirrored on three sides) does not. A closed box is a closed solid: with all six faces, every edge is shared by exactly two triangles once coincident corner points are welded. THE FACES are named by side, shellSplit's names: "floor" min y, "ceiling" max y, "south" min z, "north" max z, "west" min x, "east" max x; a face not listed is left OPEN, so ["south"] alone is a facade panel and every face but "floor" a box with no bottom. \`subdivisions\` cuts each face into a grid of quads (meshPrimitive's param: quads per WORLD axis, a face taking the two that span it), plain or a FIELD resolved per cell — vec(max(floor(box("sx")), 1), 1, 1) gives every box about one column per unit of width. The input's TOPOLOGY and its VERTEX and PRIMITIVE attributes are neither read nor carried: the cells are its points. CARRIED: every point attribute of the cell except its transform (P, rot, scale) lands on EVERY point of that cell's mesh, strings included — its colour, its label, its \`seed\` (so a random drawn from the seed is one value per box), its boundsMin/boundsMax (so box names still read the cell's box on its mesh) — together with the detail attributes. Written: P, \`uv\`, a \`normal\` (f32 tuple 3, flat and outward) under \`normals\`, the side's FACE CODE under \`faceAttr\` (i32: shellSplit's codes, 0 floor, 1 south, 2 north, 3 west, 4 east, 5 ceiling, so a material or a filter can pick the top faces, eq(attribute("boxSide"), 5)), and the input cell's index under \`cellAttr\`. A written name the cell also carries is refused rather than overwritten. A box of NO VOLUME on an axis (a plate, a slab of zero height) is KEPT, as every box node keeps it: its two faces across that axis coincide back to back, so it draws from both sides, and the faces along that axis are zero-area triangles (which area-weighted sampling and the raycast mapping skip) — the counts are always cells * the listed faces' grids; list fewer faces to drop them. An inside-out or non-finite box is refused naming the cell. No inset or bevel: shrink a box first with transformBox (about its centre, pivotIn "cell") or offsetBox (by a distance per face), which keeps the box the mesh is built from on the cell as data. Vertex coordinates are the stored f32 corners and, between them, grid line i of n at (min * (n - i) + max * i) / n, rounded to f32 — exact at both ends and wherever a line falls on 0; -0 written +0. The output is CAPPED at 4194304 points in all (repeatPoints' and splitBox's cap, checked after a field subdivisions resolves), refused past that naming the cell the total ran out on. CPU only, as every box node: it builds topology whose size depends on each cell's subdivisions, which the GPU's elementwise field kernels do not express. Empty input gives an empty mesh.`,
   inputs: [{ name: "in", kind: "geometry" }],
   outputs: [{ name: "out", kind: "geometry" }],
   params: {
@@ -79,7 +90,7 @@ export const boxesToMesh = standardNode<BoxesToMeshParams, BoxesToMeshInputs, Bo
       type: "stringList",
       default: [...DEFAULT_FACES],
       description:
-        'The sides of each box to build, in the order every cell emits them, by shellSplit\'s names: "floor" (min y), "ceiling" (max y), "south" (min z), "north" (max z), "west" (min x), "east" (max x), each at most once and at least one. A side NOT listed is left OPEN: ["south"] is one panel per cell, every side but "floor" a box with no bottom. The default is meshPrimitive\'s box order (+x, -x, +y, -y, +z, -z), which makes a cell\'s block point for point a unit meshPrimitive box copied onto it. Decided once per cook.',
+        'The sides of each box to build, in the order every cell emits them, by shellSplit\'s names: "floor" (min y), "ceiling" (max y), "south" (min z), "north" (max z), "west" (min x), "east" (max x), each at most once and at least one. A side NOT listed is left OPEN: ["south"] is one panel per cell, every side but "floor" a box with no bottom. The default is meshPrimitive\'s box order (+x, -x, +y, -y, +z, -z), which gives each cell the points and triangles of a unit meshPrimitive box copied onto it (the uv follows the face frame instead; see the description). Decided once per cook.',
     },
     subdivisions: {
       type: "vec3",
@@ -134,7 +145,7 @@ export const boxesToMesh = standardNode<BoxesToMeshParams, BoxesToMeshInputs, Bo
       if (name === undefined) {
         const near = typeof facesIn[j] === "string" ? suggestNames(facesIn[j] as string, SIDES) : { names: [], clause: "" };
         throw new Error(
-          `${NODE}: param "faces" entry ${j} is ${JSON.stringify(facesIn[j])}, which names no side of a box${near.names.length > 0 ? ` — ${near.clause.trim()}` : ""} Valid: ${SIDES.map((s, k) => `"${s}" (${SIDE_WHERE[k]})`).join(", ")} — shellSplit's names.`,
+          `${NODE}: param "faces" entry ${j} is ${JSON.stringify(facesIn[j])}, which names no side of a box${near.names.length > 0 ? ` (${near.clause.trim()})` : ""}. Valid: ${SIDES.map((s, k) => `"${s}" (${SIDE_WHERE[k]})`).join(", ")} — shellSplit's names.`,
         );
       }
       const code = (SIDES as readonly string[]).indexOf(name);
@@ -232,20 +243,31 @@ export const boxesToMesh = standardNode<BoxesToMeshParams, BoxesToMeshInputs, Bo
             `${NODE}: param "subdivisions" is ${s} along ${AXIS_NAMES[k]} on cell ${i}, but a subdivision count is a whole number of at least 1 (quads along that axis); make it one, e.g. max(floor(<count>), 1).`,
           );
         }
+        // Checked BEFORE it is stored: a count past the cap is refused as
+        // itself here, and so never wraps in the u32 column below.
+        if (s > MAX_MESH_POINTS) {
+          throw new Error(
+            `${NODE}: param "subdivisions" is ${s} along ${AXIS_NAMES[k]} on cell ${i}, past the ${MAX_MESH_POINTS} points the whole mesh is capped at. A field is not range-checked the way a plain number is, so bound the expression itself — min(<the count field>, <the most quads you meant>) — or lower a plain count.`,
+          );
+        }
         subs[i * 3 + k] = s;
       }
+      let cellPoints = 0;
       for (const code of codes) {
         const an = SIDE_AXIS[code];
         const nu = subs[i * 3 + ((an + 1) % 3)];
         const nv = subs[i * 3 + ((an + 2) % 3)];
-        totalPoints += (nu + 1) * (nv + 1);
+        cellPoints += (nu + 1) * (nv + 1);
         totalTris += 2 * nu * nv;
       }
-      if (totalPoints > MAX_INDEX || totalTris * 3 > MAX_INDEX) {
+      // THE CAP IS ON THE TOTAL, after the field has resolved (repeatPoints'
+      // and splitBox's rule). Triangles are at most twice the points.
+      if (totalPoints + cellPoints > MAX_MESH_POINTS) {
         throw new Error(
-          `${NODE}: by cell ${i} the mesh already holds ${totalPoints} points and ${totalTris} triangles, past the ${MAX_INDEX} a mesh's indices hold. Lower "subdivisions" or build fewer faces.`,
+          `${NODE}: the mesh would hold more than ${MAX_MESH_POINTS} points from the input's ${n} cell(s) — cell ${i} builds ${cellPoints} (subdivisions [${subs[i * 3]}, ${subs[i * 3 + 1]}, ${subs[i * 3 + 2]}] over ${codes.length} face(s)), and the running total reached ${totalPoints + cellPoints}. The cap is on the TOTAL, so this is the cell the total ran out on rather than necessarily the largest offender. Bound the subdivisions — min(<the count field>, <the most quads you meant>) — or build fewer faces or cells.`,
         );
       }
+      totalPoints += cellPoints;
     }
 
     // ---- build: typed arrays sized once, filled cell by cell
@@ -276,11 +298,18 @@ export const boxesToMesh = standardNode<BoxesToMeshParams, BoxesToMeshInputs, Bo
         // outward on the max side; the min side and `flip` reverse it.
         const reverse = flip !== !positive;
         const outSign = reverse ? -1 : 1;
+        // uv in the face frame: along and up are the two in-face axes, so
+        // one of them is au and the other av.
+        const alongIsU = ALONG[code] === au;
+        const alongForward = ALONG_SIGN[code] > 0;
+        const upForward = UP_SIGN[code] > 0;
         const base = pt;
         for (let iv = 0; iv <= nv; iv++) {
-          const tv = iv / nv;
           for (let iu = 0; iu <= nu; iu++) {
-            const tu = iu / nu;
+            const ia = alongIsU ? iu : iv;
+            const na = alongIsU ? nu : nv;
+            const iw = alongIsU ? iv : iu;
+            const nw = alongIsU ? nv : nu;
             // (min * (n - i) + max * i) / n: each product of an f32 corner
             // and a count under 2^29 is exact in f64, so the ends are the
             // corners themselves whatever their magnitudes, and a line meant
@@ -292,8 +321,8 @@ export const boxesToMesh = standardNode<BoxesToMeshParams, BoxesToMeshInputs, Bo
             positions[pt * 3] = Math.fround(p[0]) + 0;
             positions[pt * 3 + 1] = Math.fround(p[1]) + 0;
             positions[pt * 3 + 2] = Math.fround(p[2]) + 0;
-            uvs[pt * 2] = tu;
-            uvs[pt * 2 + 1] = tv;
+            uvs[pt * 2] = (alongForward ? ia : na - ia) / na;
+            uvs[pt * 2 + 1] = (upForward ? iw : nw - iw) / nw;
             if (normalData !== undefined) normalData[pt * 3 + an] = outSign;
             sideOf[pt] = code;
             cellOf[pt] = i;

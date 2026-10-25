@@ -102,7 +102,7 @@ const OUTWARD: Record<number, number[]> = {
 // ---------------------------------------------------------------------------
 
 describe("boxesToMesh: layout", () => {
-  it("builds the max-x face by hand: the stored corners, u = y fastest, v = z, wound outward", async () => {
+  it("builds the max-x face by hand: the stored corners, points y fastest then z, wound outward, uv in the face frame", async () => {
     const out = await mesh(cells([[[0, 0, 0], [2, 4, 6]]]), { faces: ["east"] });
     expect(tuples(out, "P", 3)).toEqual([
       [2, 0, 0],
@@ -110,11 +110,12 @@ describe("boxesToMesh: layout", () => {
       [2, 0, 6],
       [2, 4, 6],
     ]);
+    // The east wall's frame: along -z (left to right seen from +x), up +y.
     expect(tuples(out, "uv", 2)).toEqual([
-      [0, 0],
       [1, 0],
-      [0, 1],
       [1, 1],
+      [0, 0],
+      [0, 1],
     ]);
     expect(tris(out)).toEqual([
       [0, 1, 2],
@@ -140,14 +141,16 @@ describe("boxesToMesh: layout", () => {
     for (const nrm of faceNormals(out)) expect(nrm).toEqual([0, -12, 0]);
   });
 
-  it("is a unit meshPrimitive box laid on the cell, point for point, with the default faces (normals and flip included)", async () => {
+  it("has a unit meshPrimitive box's points, triangles and normals laid on the cell, with the default faces (flip included)", async () => {
     for (const flip of [false, true]) {
       const box = await mesh(cells([[[0, 0, 0], [2, 4, 8]]]), { subdivisions: [2, 4, 8], normals: true, flip });
       const prim = firstGeo(
         (await runNode(meshPrimitive, { shape: "box", size: [2, 4, 8], center: [1, 2, 4], subdivisions: [2, 4, 8], normals: true, flip }, {})).out,
       );
       expect(box.pointCount).toBe(prim.pointCount);
-      for (const name of ["P", "uv", "normal"]) expect(col(box, name)).toEqual(col(prim, name));
+      for (const name of ["P", "normal"]) expect(col(box, name)).toEqual(col(prim, name));
+      // The uv is NOT the primitive's: that one is mirrored on three sides.
+      expect(col(box, "uv")).not.toEqual(col(prim, "uv"));
       expect(Array.from(box.vertexToPoint)).toEqual(Array.from(prim.vertexToPoint));
       expect(Array.from(box.primVertexStart)).toEqual(Array.from(prim.primVertexStart));
       expect(box.attrs.primitive.require("primtype").getString(0)).toBe("poly");
@@ -242,6 +245,56 @@ describe("boxesToMesh: grid lines", () => {
     });
     // 2 columns by 1 row.
     expect(out.pointCount).toBe(6);
+  });
+});
+
+/**
+ * shellSplit's face frame, from its description: [axis, sign] of along and
+ * of up per face code (0 floor, 1 south, 2 north, 3 west, 4 east, 5 ceiling).
+ */
+const FRAME: Record<number, { along: [number, number]; up: [number, number] }> = {
+  0: { along: [0, 1], up: [2, 1] },
+  1: { along: [0, -1], up: [1, 1] },
+  2: { along: [0, 1], up: [1, 1] },
+  3: { along: [2, 1], up: [1, 1] },
+  4: { along: [2, -1], up: [1, 1] },
+  5: { along: [0, 1], up: [2, -1] },
+};
+
+describe("boxesToMesh: uv is the face frame", () => {
+  it("u runs along and v up, 0..1, on every side, for every point and every subdivision", async () => {
+    const box: Box = [[-3, 1, 2], [5, 2.5, 6]];
+    const out = await mesh(cells([box]), { subdivisions: [4, 2, 2] });
+    const P = tuples(out, "P", 3);
+    const uv = tuples(out, "uv", 2);
+    const side = col(out, "boxSide");
+    const frac = (x: number, [axis, sign]: [number, number]) => {
+      const lo = Math.fround(box[0][axis]);
+      const hi = Math.fround(box[1][axis]);
+      return sign > 0 ? (x - lo) / (hi - lo) : (hi - x) / (hi - lo);
+    };
+    P.forEach((p, i) => {
+      const fr = FRAME[side[i]];
+      expect(uv[i][0]).toBeCloseTo(frac(p[fr.along[0]], fr.along), 6);
+      expect(uv[i][1]).toBeCloseTo(frac(p[fr.up[0]], fr.up), 6);
+    });
+    // Every side's corners reach 0 and 1 exactly.
+    for (let code = 0; code < 6; code++) {
+      const us = uv.filter((_, i) => side[i] === code);
+      expect(Math.min(...us.map((t) => t[0]))).toBe(0);
+      expect(Math.max(...us.map((t) => t[0]))).toBe(1);
+      expect(Math.min(...us.map((t) => t[1]))).toBe(0);
+      expect(Math.max(...us.map((t) => t[1]))).toBe(1);
+    }
+  });
+
+  it("is UNMIRRORED seen from outside: every outward-wound triangle is counter-clockwise in uv too", async () => {
+    const out = await mesh(cells([[[0, 0, 0], [3, 2, 1]]]), { subdivisions: [3, 2, 2] });
+    const uv = tuples(out, "uv", 2);
+    for (const [a, b, c] of tris(out)) {
+      const area = (uv[b][0] - uv[a][0]) * (uv[c][1] - uv[a][1]) - (uv[b][1] - uv[a][1]) * (uv[c][0] - uv[a][0]);
+      expect(area).toBeGreaterThan(0);
+    }
   });
 });
 
@@ -341,7 +394,8 @@ describe("boxesToMesh: refusals", () => {
     expect(unknown).toMatch(/boxesToMesh: param "faces" entry 1 is "top"/);
     expect(unknown).toContain('"ceiling" (max y)');
     const near = await rejection(mesh(one(), { faces: ["nort"] }));
-    expect(near).toContain('which names no side of a box — did you mean "north"? Valid: "floor"');
+    expect(near).toContain('which names no side of a box (did you mean "north"?). Valid: "floor"');
+    expect(unknown).toContain('which names no side of a box. Valid: "floor"');
     expect(await rejection(mesh(one(), { faces: ["east", "east"] }))).toMatch(/lists "east" twice/);
     expect(await rejection(mesh(one(), { faces: [] }))).toMatch(/"faces" is empty/);
     expect(await rejection(mesh(one(), { faces: "east" }))).toMatch(/not a list/);
@@ -354,6 +408,24 @@ describe("boxesToMesh: refusals", () => {
     const two = cells([[[0, 0, 0], [1, 1, 1]], [[0, 0, 0], [0.5, 1, 1]]]);
     expect(await rejection(mesh(two, { subdivisions: f('vec(box("sx"), 1, 1)') }))).toMatch(/is 0.5 along x on cell 1/);
     expect(await rejection(mesh(one(), { subdivisions: f("vec(1, 1)") }))).toMatch(/three components/);
+  });
+
+  it("caps the mesh at 4194304 points after the field resolves, and a count past it never wraps", async () => {
+    // 2^32 would wrap to 0 in a u32 column; 2^32 + 2 to 2 (it reaches the
+    // node as f32, 2^32, as every vec3 param does).
+    for (const s of [2 ** 32, 2 ** 32 + 2, 2 ** 33, 2 ** 22 + 1]) {
+      expect(await rejection(mesh(one(), { subdivisions: [s, 1, 1], faces: ["floor"] }))).toMatch(
+        new RegExp(`param "subdivisions" is ${Math.fround(s)} along x on cell 0, past the 4194304 points`),
+      );
+    }
+    // 3001 * 3001 points on one floor: refused as a total, naming the cell.
+    const big = await rejection(mesh(one(), { subdivisions: f("vec(3000, 1, 3000)"), faces: ["floor"] }));
+    expect(big).toMatch(/more than 4194304 points from the input's 1 cell\(s\) — cell 0 builds 9006001/);
+    // Two cells each under the cap, over it together: the second is named.
+    const two = cells([[[0, 0, 0], [1, 1, 1]], [[0, 0, 0], [1, 1, 1]]]);
+    expect(await rejection(mesh(two, { subdivisions: [2000, 1, 1100], faces: ["floor"] }))).toMatch(
+      /cell 1 builds 2203101 .* the running total reached 4406202/,
+    );
   });
 
   it("refuses a missing or mistyped box, and a box inside out or not finite, naming the cell and the axis", async () => {
