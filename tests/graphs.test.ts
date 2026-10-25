@@ -83,6 +83,12 @@ const COVERAGE_EXEMPT = new Map<string, string>([
     "its items are injected at runtime and carry nothing through serialization, " +
       "so a corpus graph using it would cook to nothing — the test above forbids it here outright",
   ],
+  [
+    "boxesToMesh",
+    "TEMPORARY: it landed while the graphs that hand-build its tail (examples-facade, examples-floorplan, " +
+      "basics-split-box, basics-apply-rules) were being rewritten elsewhere; remove with the adoption " +
+      "(tests/corpusNodeCoverage.test.ts fails once a graph uses it)",
+  ],
 ]);
 
 /**

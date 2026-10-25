@@ -196,6 +196,9 @@ const ROOT_SURFACE = [
   // Scales each cell's box about a pivot (a world point, a fraction of
   // the cell, or of every cell's union) and then moves it.
   "transformBox",
+  // Every cell's box as mesh faces, built on the stored corners -- the
+  // tail from a grammar's cells to drawable geometry.
+  "boxesToMesh",
   "simplexNoise", "sin",
   "smoothNormals", "smoothstep",
   "spawnInstances", "specChildEntries", "splineSample", "sqrt", "standardNode", "step",

@@ -519,6 +519,7 @@ describe("category metadata", () => {
       splitPolygons: "surface",
       bridgePaths: "surface",
       smoothNormals: "surface",
+      boxesToMesh: "surface",
       valueConstant: "value",
       spawnInstances: "spawn",
       dataInput: "io",

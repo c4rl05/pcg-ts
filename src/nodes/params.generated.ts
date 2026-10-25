@@ -707,6 +707,88 @@ export type BoxContactInputs = "in" | "targets";
 export type BoxContactOutputs = "out" | "pairs";
 
 /**
+ * Params of the `boxesToMesh` node type.
+ */
+export interface BoxesToMeshParams {
+  /**
+   * The sides of each box to build, in the order every cell emits them, by shellSplit's
+   * names: "floor" (min y), "ceiling" (max y), "south" (min z), "north" (max z), "west" (min
+   * x), "east" (max x), each at most once and at least one. A side NOT listed is left OPEN:
+   * ["south"] is one panel per cell, every side but "floor" a box with no bottom. The
+   * default is meshPrimitive's box order (+x, -x, +y, -y, +z, -z), which makes a cell's
+   * block point for point a unit meshPrimitive box copied onto it. Decided once per cook.
+   *
+   * @defaultValue `["east","west","ceiling","floor","north","south"]`
+   */
+  faces: readonly string[];
+  /**
+   * Quads per WORLD axis [x, y, z] — meshPrimitive's param, with its reading: whole numbers,
+   * at least 1, and each face takes the two axes that span it (the floor and ceiling x and
+   * z, the south and north walls x and y, the west and east walls y and z), so [1, 1, 1] is
+   * two triangles per face. A single number, plain or a field, broadcasts to all three. As a
+   * FIELD it is resolved per cell on the input, with the cell's box names —
+   * vec(max(floor(box("sx")), 1), max(floor(box("sy")), 1), 1) cuts every box into roughly
+   * unit quads. A count that is not a whole number of at least 1 is refused naming the cell
+   * (make it one with max(floor(...), 1)).
+   *
+   * - Range: `>= 1`
+   * - Accepts a field.
+   *
+   * @defaultValue `[1,1,1]`
+   */
+  subdivisions: FieldParam;
+  /**
+   * Reverse every triangle's winding (and the written `normal` with it), so every box faces
+   * INWARD — a room seen from inside it. meshPrimitive's `flip`.
+   *
+   * @defaultValue `false`
+   */
+  flip: boolean;
+  /**
+   * Write a `normal` point attribute (f32 tuple 3): each face's unit outward axis (inward
+   * under `flip`) on every one of its points — flat faces and hard edges, exact because
+   * faces share no points. Off by default, as on meshPrimitive: the renderer computes one
+   * from the triangles when none is stored, and a stored normal is only right until
+   * something moves P. Turn it on when this mesh is merged with one that carries a normal
+   * (mergePrimitives fills a missing column with (0, 0, 0), which a lit material renders
+   * black).
+   *
+   * @defaultValue `false`
+   */
+  normals: boolean;
+  /**
+   * Name of the i32 point attribute (tuple 1) receiving each point's side as shellSplit's
+   * FACE CODE: 0 floor, 1 south, 2 north, 3 west, 4 east, 5 ceiling. It is "boxSide" rather
+   * than shellSplit's "face" because a shellSplit piece already carries "face" — the side of
+   * its PARENT it was cut from — and that is carried onto the mesh too, so both stay
+   * readable: the outer face of every wall piece is eq(attribute("boxSide"),
+   * attribute("face")). Empty writes none. Refused if the cell also carries the name.
+   *
+   * @defaultValue `"boxSide"`
+   */
+  faceAttr: string;
+  /**
+   * Name of an i32 point attribute (tuple 1) receiving the INPUT CELL'S INDEX on every point
+   * of its mesh — copyToPoints' `targetIndexAttr`: the key that groups a mesh back into its
+   * boxes (partitionByAttribute, promoteAttribute). Empty (the default) writes none. Refused
+   * if the cell also carries the name.
+   *
+   * @defaultValue `""`
+   */
+  cellAttr: string;
+}
+
+/**
+ * The input pin names of the `boxesToMesh` node type.
+ */
+export type BoxesToMeshInputs = "in";
+
+/**
+ * The output pin names of the `boxesToMesh` node type.
+ */
+export type BoxesToMeshOutputs = "out";
+
+/**
  * Params of the `brickConnectivity` node type.
  */
 export interface BrickConnectivityParams {
