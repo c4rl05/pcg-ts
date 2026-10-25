@@ -521,6 +521,182 @@ describe("splitBox: per-cell axis", () => {
   });
 });
 
+describe('splitBox: axis "longest"', () => {
+  const halves = { labels: ["a", "b"], sizes: [1, 1], units: ["relative", "relative"] };
+
+  /** The axis each emitted pair was cut along: the one whose lo moved on the second piece. */
+  function cutAxes(out: Geometry): number[] {
+    const lo = col(out, "boundsMin");
+    const axes: number[] = [];
+    for (let i = 0; i < out.pointCount; i += 2) {
+      const moved = [0, 1, 2].filter((a) => lo[(i + 1) * 3 + a] !== lo[i * 3 + a]);
+      expect(moved.length).toBe(1);
+      axes.push(moved[0]);
+    }
+    return axes;
+  }
+
+  it("cuts each cell across its own longest span, halves written out by hand", async () => {
+    const geo = cells([
+      [[0, 0, 0], [4, 1, 2]],
+      [[0, 0, 0], [1, 3, 2]],
+      [[0, 0, 0], [1, 1, 5]],
+    ]);
+    const out = await split(geo, { axis: "longest", ...halves });
+    expect(col(out, "boundsMin")).toEqual([0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 1.5, 0, 0, 0, 0, 0, 0, 2.5]);
+    expect(col(out, "boundsMax")).toEqual([2, 1, 2, 4, 1, 2, 1, 1.5, 2, 1, 3, 2, 1, 1, 2.5, 1, 1, 5]);
+  });
+
+  it('"longestOf" restricts the candidates: "xz" ignores a tall y', async () => {
+    const geo = cells([
+      [[0, 0, 0], [1, 9, 3]],
+      [[0, 0, 0], [3, 9, 1]],
+    ]);
+    expect(cutAxes(await split(geo, { axis: "longest", longestOf: "xz", ...halves }))).toEqual([2, 0]);
+    expect(cutAxes(await split(geo, { axis: "longest", ...halves }))).toEqual([1, 1]);
+    expect(cutAxes(await split(cells([[[0, 0, 0], [9, 1, 3]]]), { axis: "longest", longestOf: "yz", ...halves }))).toEqual([2]);
+    expect(cutAxes(await split(cells([[[0, 0, 0], [1, 2, 9]]]), { axis: "longest", longestOf: "xy", ...halves }))).toEqual([1]);
+  });
+
+  it("an exact tie goes to the first axis of the set, in x, y, z order", async () => {
+    const geo = cells([
+      [[0, 0, 0], [2, 2, 2]],
+      [[0, 0, 0], [1, 3, 3]],
+      [[0, 0, 0], [3, 1, 3]],
+    ]);
+    expect(cutAxes(await split(geo, { axis: "longest", ...halves }))).toEqual([0, 1, 0]);
+    expect(cutAxes(await split(geo, { axis: "longest", longestOf: "yz", ...halves }))).toEqual([1, 1, 2]);
+    // A zero-size box has every span tied at 0; it is not refused, and has
+    // nothing to emit.
+    const flat = cells([[[1, 1, 1], [1, 1, 1]]]);
+    const out = await split(flat, { axis: "longest", longestOf: "yz", labels: ["a"], sizes: [1], units: ["relative"] });
+    expect(out.pointCount).toBe(0);
+  });
+
+  it("a tie is to f32 precision: a square cell is cut along x even where its stored z span rounds longer", async () => {
+    // x [0, 0.2] stores a span of 0.20000000298, z [0.1, 0.3] one of
+    // 0.20000001043: z is longer by 7.5e-9 in f32, under an ulp — a tie.
+    const square = cells([[[0, 0, 0.1], [0.2, 0.1, 0.3]]]);
+    const lo = col(square, "boundsMin");
+    const hi = col(square, "boundsMax");
+    expect(hi[2] - lo[2]).toBeGreaterThan(hi[0] - lo[0]);
+    expect(cutAxes(await split(square, { axis: "longest", ...halves }))).toEqual([0]);
+    // Far from the origin an f32 step at x = 1e5 is 1/128, so a z span
+    // 0.005 longer is still a tie, and one 0.05 longer is not.
+    const far = cells([
+      [[1e5, 0, 0], [1e5 + 4, 1, 4.005]],
+      [[1e5, 0, 0], [1e5 + 4, 1, 4.05]],
+    ]);
+    expect(cutAxes(await split(far, { axis: "longest", ...halves }))).toEqual([0, 2]);
+    // Near the origin the same 0.005 is far past precision: z.
+    expect(cutAxes(await split(cells([[[0, 0, 0], [4, 1, 4.005]]]), { axis: "longest", ...halves }))).toEqual([2]);
+  });
+
+  it("is the argmax the graphs spelled by hand, on every cell of a random population", async () => {
+    // select(sx >= sy && sx >= sz, 0, select(sy >= sz, 1, 2)): x wins its
+    // ties, then y over z. Away from f32 near-ties the two must agree.
+    const boxes: [number[], number[]][] = [];
+    let s = 7;
+    const rnd = (): number => {
+      s = (Math.imul(s, 1103515245) + 12345) >>> 0;
+      return (s >>> 8) / (1 << 24);
+    };
+    for (let i = 0; i < 400; i++) {
+      // Corners and spans on a 0.25 grid: every stored span is exact, so
+      // the ties are exact ties and no f32 near-tie separates the two.
+      const l = [0, 1, 2].map(() => Math.floor(rnd() * 80) * 0.25 - 10);
+      boxes.push([l, l.map((v) => v + Math.floor(rnd() * 12) * 0.25)]);
+    }
+    const geo = cells(boxes);
+    const box = (n: string) => ({ fn: "box", name: n });
+    const argmax = fieldFromJson({
+      fn: "select",
+      args: [
+        { fn: "mul", args: [{ fn: "ge", args: [box("sx"), box("sy")] }, { fn: "ge", args: [box("sx"), box("sz")] }] },
+        0,
+        { fn: "select", args: [{ fn: "ge", args: [box("sy"), box("sz")] }, 1, 2] },
+      ],
+    });
+    const byHand = await split(geo, { axis: "perCell", axisIndex: argmax, ...halves });
+    const byNode = await split(geo, { axis: "longest", ...halves });
+    expect(byHand.pointCount).toBeGreaterThan(0);
+    expect(snapshotGeometry(byNode)).toEqual(snapshotGeometry(byHand));
+    // The comparison can fail: cut along "xz" only, some cells differ.
+    const xz = await split(geo, { axis: "longest", longestOf: "xz", ...halves });
+    expect(snapshotGeometry(xz)).not.toEqual(snapshotGeometry(byHand));
+  });
+
+  it("refuses an unknown longestOf, naming the valid sets", async () => {
+    const msg = await rejection(split(unitCell(0, 1), { axis: "longest", longestOf: "zx" }));
+    expect(msg).toMatch(/param "longestOf" is "zx"; valid: xyz, xy, xz, yz/);
+  });
+
+  it("ignores longestOf unless axis is longest", async () => {
+    const out = await split(cells([[[0, 0, 0], [2, 1, 9]]]), { axis: "x", longestOf: "xz", ...halves });
+    expect(cutAxes(out)).toEqual([0]);
+  });
+
+  it("refuses a box inside out or not finite along any axis of the set, and only the set", async () => {
+    const insideOutY = cells([[[0, 5, 0], [4, 1, 2]]]);
+    expect(await rejection(split(insideOutY, { axis: "longest", ...halves }))).toMatch(
+      /cell 0's box is inside out along y .* axis "longest" has no longest span/,
+    );
+    // y is not a candidate under "xz", so the cell is read only in x and z.
+    expect(cutAxes(await split(insideOutY, { axis: "longest", longestOf: "xz", ...halves }))).toEqual([0]);
+    const nanZ = cells([[[0, 0, Number.NaN], [4, 1, 2]]]);
+    expect(await rejection(split(nanZ, { axis: "longest", ...halves }))).toMatch(/cell 0's box is not finite along z/);
+  });
+
+  it("does not read the box of a cell `where` passes through", async () => {
+    const geo = cells([
+      [[0, 0, Number.NaN], [4, 1, 2]],
+      [[0, 0, 0], [1, 1, 6]],
+    ]);
+    geo.attrs.point.add("go", "f32", 1, 0).set(1, 1);
+    const out = await split(geo, { axis: "longest", where: attribute("go"), ...halves });
+    expect(out.pointCount).toBe(3);
+    expect(spans(out, 2).slice(1)).toEqual([
+      [0, 3],
+      [3, 6],
+    ]);
+  });
+
+  it("round-trips through JSON and cooks byte-identically, run to run", async () => {
+    const build = (): Graph => {
+      const g = new Graph(5);
+      const grid = g.add(pointGrid, { countX: 3, countY: 1, countZ: 3, spacing: [5, 5, 5] }, "grid");
+      const box = g.add(
+        setBounds,
+        {
+          boundsMin: fieldFromJson({ fn: "position" }),
+          boundsMax: fieldFromJson({
+            fn: "add",
+            args: [{ fn: "position" }, { fn: "vec", args: [{ fn: "add", args: [1, { fn: "mul", args: [{ fn: "randomField", key: "w" }, 4] }] }, 2, { fn: "add", args: [1, { fn: "mul", args: [{ fn: "randomField", key: "d" }, 4] }] }] }],
+          }),
+        },
+        "box",
+      );
+      const cut = g.add(splitBox, { axis: "longest", longestOf: "xz", ...halves }, "cut");
+      g.connect(grid, "out", box, "in");
+      g.connect(box, "out", cut, "in");
+      g.output(cut, "out", "pieces");
+      return g;
+    };
+    const text = JSON.stringify(serializeGraph(build()));
+    expect(text).toContain('"longestOf":"xz"');
+    const back = deserializeGraph(JSON.parse(text));
+    expect(JSON.stringify(serializeGraph(back))).toBe(text);
+    const a = firstGeo((await cook(build())).outputs.pieces);
+    const b = firstGeo((await cook(back)).outputs.pieces);
+    const c = firstGeo((await cook(build())).outputs.pieces);
+    expect(a.pointCount).toBe(18);
+    expect(snapshotGeometry(b)).toEqual(snapshotGeometry(a));
+    expect(snapshotGeometry(c)).toEqual(snapshotGeometry(a));
+    // Both floor axes are used across the nine random cells.
+    expect(new Set(cutAxes(a))).toEqual(new Set([0, 2]));
+  });
+});
+
 describe("splitBox: where (pass-through) and nested splits", () => {
   it("passes a cell where `where` is 0 through unsplit: seed, box and labels kept", async () => {
     const geo = cells([

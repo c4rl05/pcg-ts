@@ -6534,20 +6534,42 @@ export interface SplitBoxParams {
    * The axis every cell is cut along: "x", "y" or "z" — a component of the cell's
    * boundsMin/boundsMax, not a direction in the cell's rotated frame. "perCell" reads the
    * axis PER CELL from `axisIndex` instead, for a split whose direction is the cell's own —
-   * a wall cut along its run, which is x for a south wall and z for an east one. Decided
-   * once per cook; with "perCell" only numbers are read per cell.
+   * a wall cut along its run, which is x for a south wall and z for an east one. "longest"
+   * cuts each cell along ITS LONGEST SPAN among the axes `longestOf` names (all three by
+   * default; "xz" for the longer floor axis), the cut of a recursive subdivision that halves
+   * a panel or a plan across its long side. Decided once per cook; with "perCell" or
+   * "longest" only numbers are read per cell.
    *
-   * - Enum: `"x"` | `"y"` | `"z"` | `"perCell"`
+   * - Enum: `"x"` | `"y"` | `"z"` | `"perCell"` | `"longest"`
    *
    * @defaultValue `"x"`
    */
-  axis: "x" | "y" | "z" | "perCell";
+  axis: "x" | "y" | "z" | "perCell" | "longest";
+  /**
+   * Read ONLY when `axis` is "longest" (ignored otherwise): the axes a cell's longest span
+   * is chosen from — "xyz" (the default) all three, "xz" the floor plane (a plan cut across
+   * its longer wall whatever its height), "xy" or "yz". A span is boundsMax - boundsMin
+   * along the axis. TIES go to the FIRST axis of the set in x, y, z order, and a tie is to
+   * f32 precision: a candidate whose span is within two f32 steps at its own coordinates,
+   * plus two at the longest one's, of the longest span counts as tied — so a square cell is
+   * cut along x wherever it stands, not along whichever axis its stored corners happen to
+   * round longer (at x = 1e5 an f32 step is 1/128). A zero-size box is cut along the first
+   * axis of the set. A cell whose box is not finite, or is inside out, along any axis of the
+   * set is refused naming the cell, since it has no longest span; a cell `where` passes
+   * through is not read.
+   *
+   * - Enum: `"xyz"` | `"xy"` | `"xz"` | `"yz"`
+   *
+   * @defaultValue `"xyz"`
+   */
+  longestOf: "xyz" | "xy" | "xz" | "yz";
   /**
    * Read ONLY when `axis` is "perCell" (ignored otherwise): the axis each cell is cut along,
    * 0 = x, 1 = y, 2 = z. As a field it is resolved on the input's point domain, ONE AXIS PER
-   * CELL, e.g. select(attribute("alongX"), 0, 2) or 2 * lt(<span x>, <span z>) for "the
-   * longer floor axis". Rounded to nearest; a value that rounds to anything but 0, 1 or 2,
-   * or is not finite, is refused naming the cell.
+   * CELL, e.g. select(attribute("alongX"), 0, 2) — an axis the cell CARRIES; for "the
+   * longest span" use axis "longest" instead of spelling the comparison here. Rounded to
+   * nearest; a value that rounds to anything but 0, 1 or 2, or is not finite, is refused
+   * naming the cell.
    *
    * - Range: `0..2`
    * - Accepts a field.

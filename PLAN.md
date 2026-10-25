@@ -595,7 +595,8 @@ identity, not rounding — no two-level split can reproduce flat slot seeds
 costs.
 
 Open, and deliberately not in this unit: a group repeat (`{a | b}*`), a
-`"longestXZ"` axis (the block rounds write `2 * lt(sx, sz)` for it), the
+~~`"longestXZ"` axis~~ (SHIPPED 2026-10-25 as `axis: "longest"` with
+`longestOf: "xz"`; ties to the first axis of the set, to f32 precision), the
 shell split (floor / walls / ceiling), and a label-keyed rule table. The
 nested opening also showed that a split's sizes resolve on the CHILD of the
 previous split, whose box no longer holds the parent's corners: the third

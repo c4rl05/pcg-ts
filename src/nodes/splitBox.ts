@@ -63,7 +63,15 @@ const NODE = "splitBox";
  */
 const MAX_SPLIT_POINTS = 1 << 22;
 
-const AXES = ["x", "y", "z", "perCell"] as const;
+const AXES = ["x", "y", "z", "perCell", "longest"] as const;
+/** The candidate sets `axis` "longest" may choose from, as axis-index lists. */
+const LONGEST_OF = ["xyz", "xy", "xz", "yz"] as const;
+const LONGEST_AXES: readonly (readonly number[])[] = [
+  [0, 1, 2],
+  [0, 1],
+  [0, 2],
+  [1, 2],
+];
 const UNITS = ["absolute", "relative", "repeat"] as const;
 const ROUNDS = ["floor", "round", "ceil"] as const;
 const FITS = ["error", "clip", "scale"] as const;
@@ -86,6 +94,45 @@ const FIT_SCALE = 2;
  */
 function slotSeed(h1: number, k: number): number {
   return hashFinalize(hashMix(h1, k));
+}
+
+/**
+ * `axis` "longest": the axis of cell i's longest span among `axes` (listed
+ * in x, y, z order). Ties, to f32 precision, go to the FIRST axis of the
+ * set: the exact maximum is found first, then the first candidate whose
+ * span is within ULP_TOL ulps of its own coordinates plus ULP_TOL of the
+ * maximum's wins. Measuring every candidate against the one maximum, not
+ * pairwise, keeps the choice well defined where the tolerance would chain
+ * a ~ b ~ c with a !~ c.
+ */
+function longestAxisOf(i: number, axes: readonly number[], lo: Float32Array, hi: Float32Array): number {
+  let best = axes[0];
+  let bestSpan = -1;
+  for (const a of axes) {
+    const l = lo[i * 3 + a];
+    const h = hi[i * 3 + a];
+    if (!Number.isFinite(l) || !Number.isFinite(h)) {
+      throw new Error(
+        `${NODE}: cell ${i}'s box is not finite along ${AXIS_NAMES[a]} — boundsMin ${l}, boundsMax ${h} — so axis "longest" has no longest span to cut it across. Fix the setBounds that made it, or pass the cell through with "where".`,
+      );
+    }
+    if (!(h >= l)) {
+      throw new Error(
+        `${NODE}: cell ${i}'s box is inside out along ${AXIS_NAMES[a]} — boundsMin ${l} is above boundsMax ${h} — so axis "longest" has no longest span to cut it across. Fix the setBounds that made it, or pass the cell through with "where".`,
+      );
+    }
+    if (h - l > bestSpan) {
+      best = a;
+      bestSpan = h - l;
+    }
+  }
+  const tolOf = (a: number): number => ULP_TOL * f32Ulp(Math.max(Math.abs(lo[i * 3 + a]), Math.abs(hi[i * 3 + a])));
+  const bestTol = tolOf(best);
+  for (const a of axes) {
+    if (a === best) break;
+    if (hi[i * 3 + a] - lo[i * 3 + a] >= bestSpan - (tolOf(a) + bestTol)) return a;
+  }
+  return best;
 }
 
 /** A cell's box along the split axis, cut: `lo`/`hi` per emitted piece. */
@@ -113,7 +160,14 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
       enum: [...AXES],
       default: "x",
       description:
-        'The axis every cell is cut along: "x", "y" or "z" — a component of the cell\'s boundsMin/boundsMax, not a direction in the cell\'s rotated frame. "perCell" reads the axis PER CELL from `axisIndex` instead, for a split whose direction is the cell\'s own — a wall cut along its run, which is x for a south wall and z for an east one. Decided once per cook; with "perCell" only numbers are read per cell.',
+        'The axis every cell is cut along: "x", "y" or "z" — a component of the cell\'s boundsMin/boundsMax, not a direction in the cell\'s rotated frame. "perCell" reads the axis PER CELL from `axisIndex` instead, for a split whose direction is the cell\'s own — a wall cut along its run, which is x for a south wall and z for an east one. "longest" cuts each cell along ITS LONGEST SPAN among the axes `longestOf` names (all three by default; "xz" for the longer floor axis), the cut of a recursive subdivision that halves a panel or a plan across its long side. Decided once per cook; with "perCell" or "longest" only numbers are read per cell.',
+    },
+    longestOf: {
+      type: "enum",
+      enum: [...LONGEST_OF],
+      default: "xyz",
+      description:
+        'Read ONLY when `axis` is "longest" (ignored otherwise): the axes a cell\'s longest span is chosen from — "xyz" (the default) all three, "xz" the floor plane (a plan cut across its longer wall whatever its height), "xy" or "yz". A span is boundsMax - boundsMin along the axis. TIES go to the FIRST axis of the set in x, y, z order, and a tie is to f32 precision: a candidate whose span is within two f32 steps at its own coordinates, plus two at the longest one\'s, of the longest span counts as tied — so a square cell is cut along x wherever it stands, not along whichever axis its stored corners happen to round longer (at x = 1e5 an f32 step is 1/128). A zero-size box is cut along the first axis of the set. A cell whose box is not finite, or is inside out, along any axis of the set is refused naming the cell, since it has no longest span; a cell `where` passes through is not read.',
     },
     axisIndex: {
       type: "f32",
@@ -122,7 +176,7 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
       max: 2,
       acceptsField: true,
       description:
-        'Read ONLY when `axis` is "perCell" (ignored otherwise): the axis each cell is cut along, 0 = x, 1 = y, 2 = z. As a field it is resolved on the input\'s point domain, ONE AXIS PER CELL, e.g. select(attribute("alongX"), 0, 2) or 2 * lt(<span x>, <span z>) for "the longer floor axis". Rounded to nearest; a value that rounds to anything but 0, 1 or 2, or is not finite, is refused naming the cell.',
+        'Read ONLY when `axis` is "perCell" (ignored otherwise): the axis each cell is cut along, 0 = x, 1 = y, 2 = z. As a field it is resolved on the input\'s point domain, ONE AXIS PER CELL, e.g. select(attribute("alongX"), 0, 2) — an axis the cell CARRIES; for "the longest span" use axis "longest" instead of spelling the comparison here. Rounded to nearest; a value that rounds to anything but 0, 1 or 2, or is not finite, is refused naming the cell.',
     },
     labels: {
       type: "stringList",
@@ -211,7 +265,18 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
     if (axisName === undefined) {
       throw new Error(`${NODE}: param "axis" is ${JSON.stringify(params.axis)}; valid: ${AXES.join(", ")}.`);
     }
-    const fixedAxis = axisName === "perCell" ? -1 : AXIS_NAMES.indexOf(axisName as "x" | "y" | "z");
+    const byLongest = axisName === "longest";
+    const fixedAxis = axisName === "perCell" || byLongest ? -1 : AXIS_NAMES.indexOf(axisName as "x" | "y" | "z");
+    let longestAxes: readonly number[] = LONGEST_AXES[0];
+    if (byLongest) {
+      const of = canonicalOneOf(LONGEST_OF, params.longestOf);
+      if (of === undefined) {
+        throw new Error(
+          `${NODE}: param "longestOf" is ${JSON.stringify(params.longestOf)}; valid: ${LONGEST_OF.join(", ")} — the axes "longest" chooses a cell's longest span from (e.g. "xz" for the longer floor axis).`,
+        );
+      }
+      longestAxes = LONGEST_AXES[LONGEST_OF.indexOf(of)];
+    }
 
     const labels = params.labels;
     if (!Array.isArray(labels)) {
@@ -390,12 +455,18 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
     } else {
       whereAll = (params.where as number) !== 0;
     }
+    const splits = (i: number): boolean => (whereCol === undefined ? whereAll : whereCol[i] !== 0);
     let axisCol: ArrayLike<number> | undefined;
-    if (fixedAxis < 0) {
+    if (fixedAxis < 0 && !byLongest) {
       axisCol = requireScalarColumn(resolveOn(src, "point", params.axisIndex, seed, NODE, "axisIndex"), NODE, "axisIndex", "cell", "an axis index").data;
     }
     const axisOf = new Uint8Array(n);
     for (let i = 0; i < n; i++) {
+      if (byLongest) {
+        // Only the cells that are cut: a pass-through cell's box is not read.
+        if (splits(i)) axisOf[i] = longestAxisOf(i, longestAxes, lo, hi);
+        continue;
+      }
       if (axisCol === undefined) {
         axisOf[i] = fixedAxis;
         continue;
@@ -409,7 +480,6 @@ export const splitBox = standardNode<SplitBoxParams, SplitBoxInputs, SplitBoxOut
       }
       axisOf[i] = a;
     }
-    const splits = (i: number): boolean => (whereCol === undefined ? whereAll : whereCol[i] !== 0);
     // The direction is decided per cell as a boolean: only its sign is read.
     let dirCol: ArrayLike<number> | undefined;
     let revAll = false;
