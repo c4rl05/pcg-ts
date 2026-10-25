@@ -93,6 +93,13 @@ describe("latticeSnap.ts", () => {
     expect(f32Ulp(-1000)).toBe(2 ** -14);
     expect(f32Ulp(5e5)).toBe(2 ** -5);
     expect(f32Ulp(0)).toBe(2 ** -149);
+    expect(f32Ulp(Infinity)).toBe(Infinity);
+    // Just below a power of two it is the lower binade's: Math.log2 rounds
+    // 1024 - 2^-42 (two f64 steps below 1024) up to 10, and the log2 form
+    // gave twice this.
+    expect(Math.log2(1024 - 2 ** -42)).toBe(10);
+    expect(f32Ulp(-(1024 - 2 ** -42))).toBe(2 ** -14);
+    expect(f32Ulp(2 - 2 ** -52)).toBe(2 ** -23);
     // It is the gap to the next f32.
     for (const x of [0.1, 3, 1000.5, 98765.43, 1e6]) {
       const f = Math.fround(x);

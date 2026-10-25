@@ -33,11 +33,27 @@ const AXIS_NAMES = ["x", "y", "z"] as const;
  */
 export const ULP_TOL = 2;
 
-/** One f32 ulp at the magnitude of `x` (the smallest normal's at 0). */
+/** f32Ulp's scratch: one f64 and its two 32-bit words, the high one (sign, exponent) at HI on either byte order. */
+const ULP_F64 = new Float64Array(1);
+const ULP_U32 = new Uint32Array(ULP_F64.buffer);
+const HI = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1 ? 1 : 0;
+
+/**
+ * One f32 ulp at the magnitude of `x` (the smallest normal's at 0):
+ * 2^(e - 23) for the binary exponent e of |x|, read from the f64's bits and
+ * written as the bits of the answer. Exact where `log2` is not: a few f64
+ * ulps below a power of two, Math.log2 rounds up to the power and gave
+ * twice the ulp. Every f32 value is far enough from one to read the same.
+ */
 export function f32Ulp(x: number): number {
   const a = Math.abs(x);
   if (!(a > 1.1754943508222875e-38)) return 1.401298464324817e-45;
-  return Math.pow(2, Math.floor(Math.log2(a)) - 23);
+  if (a === Infinity) return Infinity;
+  ULP_F64[0] = a;
+  const e = ((ULP_U32[HI] >>> 20) & 0x7ff) - 1023;
+  ULP_U32[HI] = (e - 23 + 1023) << 20;
+  ULP_U32[1 - HI] = 0;
+  return ULP_F64[0];
 }
 
 /**
