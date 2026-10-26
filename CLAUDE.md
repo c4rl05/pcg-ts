@@ -11,7 +11,9 @@ Four foundations, each carried through the whole library:
 - **The data model.** Attributes live on domains (point / vertex /
   primitive / detail) with promote and transfer between them. The PCG
   "point with attributes" is the point domain plus standard attributes
-  (transform, density, bounds, color, seed).
+  (transform, density, bounds, color, seed). Bounds are an extent local
+  to the point's transform, world = P + rot * (scale * x), the one
+  meaning every node reads.
 - **The runtime.** Hierarchical generation across grid levels with an
   unbounded level above, partitioned (budgeted, cancellable) cooking,
   spawners as first-class graph terminals. GPU cooking ships (WebGPU):
