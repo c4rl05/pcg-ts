@@ -1,31 +1,43 @@
 /**
- * boxesToMesh as a drop-in for the hand-built cell-to-mesh tail, measured on
- * a graph IN MEMORY. The graph is tests/support/splitBoxCopyTail.json:
+ * boxesToMesh against the cell-to-instance tail, measured on a graph IN
+ * MEMORY. The graph is tests/support/splitBoxCopyTail.json:
  * graphs/basics-split-box.json as it stood before the corpus adopted
- * boxesToMesh (frozen from fb047adb, byte for byte), so the comparison
- * keeps the tail it replaced to compare against.
+ * boxesToMesh (frozen from fb047adb, byte for byte). The file is kept as
+ * it was, as THE OLD IDIOM, and both sides below are built from it in
+ * memory.
  *
- * That graph ends in the four-node tail: `centre`
- * (P = box("center")), `size` (scale = the box less 0.08, z cut to 0.2 on
- * openings), a unit meshPrimitive box `unitBox`, and `panels`, a
- * copyToPoints topology "keep" of the unit box onto the cells. `centre` and
- * `size` also feed the `pieces` output, so they stay; the copy is replaced
- * by a placeBox that states the same shrink as a BOX (size = the same
- * expression, anchor 0.5, fit "allow" because the 0.01 floor can exceed a
- * sliver) and a boxesToMesh on it.
+ * The old idiom, and why it is not run as it stands. Its `blocks` wrote
+ * WORLD corners from position() (P - [4, 0, 0.25] .. P + [4, h, 0.25]),
+ * and its tail ran `centre` (P = box("center")), `size` (scale = the box
+ * less 0.08, z cut to 0.2 on openings), a unit meshPrimitive box and a
+ * copyToPoints topology "keep". A box is now an extent in its point's own
+ * frame (world = P + rot * (scale * x)), so those corners count P twice,
+ * and so does P = box("center") whenever P is not 0. Both sides therefore
+ * start from the same LOCAL blocks: `blocks` with position() replaced by
+ * [0, 0, 0], the box about the row point — exactly what setBounds anchor
+ * "baseCenter" writes.
+ *
+ * - The INSTANCE side, the tail as it is written now: the cells after
+ *   `jambs`, then pivotBox (P to each piece's centre, its box about it),
+ *   the fixture's `size`, the unit box, copyToPoints "keep".
+ * - The MESH side: the same cells, a placeBox `shrunk` that states the same
+ *   shrink as a BOX (size = the `size` expression, anchor 0.5, fit "allow"
+ *   because the 0.01 floor can exceed a sliver), and boxesToMesh, which
+ *   builds every face through the cell's P.
  *
  * What is pinned, over 20 seeds: the topology is byte-identical (the point
  * and triangle layout is meshPrimitive's box laid on each cell, the default
- * faces in its order); the uv is NOT the box primitive's but the face frame
- * shellSplit writes (u along, v up, unmirrored seen from outside), checked
- * point by point against the stored box; every new vertex lies EXACTLY on the placed box's stored faces;
- * the tail's vertices, rebuilt as f32(c + s * +-0.5), agree with them to
- * within one f32 ulp, and on some boxes miss them by that ulp (measured:
- * 7056 of 193320 coordinates over seeds 1-20, every one by exactly one
- * ulp). A control (the shrink off by 0.001) shows the comparison can fail.
- * With the shrink removed (scale = box("size") on the tail, the cells
- * themselves on the node) the tail misses the cells' own stored faces on
- * 17424 of 193320 coordinates and the node on none.
+ * faces in its order); the uv is the face frame shellSplit writes (u along,
+ * v up, unmirrored seen from outside), checked point by point against the
+ * stored box; every mesh vertex is EXACTLY f32(P + the stored face
+ * coordinate) — the stored face mapped through the cell's transform and
+ * rounded once; and the instance side's vertices, rebuilt from a pivoted
+ * centre and a size, agree with them to within one f32 ulp and miss them
+ * by that ulp on some coordinates (counted below). A control (the shrink
+ * off by 0.001) shows the comparison can fail. With the shrink removed
+ * (scale = box("size") on the instance side, the cells themselves on the
+ * node) the instance side misses the cells' own stored faces on some
+ * coordinates and the node on none.
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -46,18 +58,58 @@ interface G {
 
 const load = (): G => JSON.parse(readFileSync(FILE, "utf8"));
 
-/** The tail replaced: unitBox and panels out, placeBox `shrunk` and boxesToMesh `panels` in. */
-function dropIn(g: G, sizeExpr?: unknown): G {
+/** Every {fn: "position"} in a field spec replaced by the constant [0, 0, 0]. */
+function unplace(spec: unknown): unknown {
+  if (Array.isArray(spec)) return spec.map(unplace);
+  if (spec !== null && typeof spec === "object") {
+    const o = spec as Json;
+    if (o.fn === "position") return { fn: "vec", args: [0, 0, 0] };
+    return Object.fromEntries(Object.entries(o).map(([k, v]) => [k, unplace(v)]));
+  }
+  return spec;
+}
+
+/** The fixture with LOCAL blocks; returns the graph and the `size` expression. */
+function localBlocks(seed: number, sizeExpr?: unknown): { g: G; size: unknown } {
+  const g = load();
+  g.seed = seed;
+  const blocks = g.nodes.find((n) => n.id === "blocks") as { params: Json };
+  blocks.params = unplace(blocks.params) as Json;
+  const size = g.nodes.find((n) => n.id === "size") as { params: { value: unknown } };
+  if (sizeExpr !== undefined) size.params.value = sizeExpr;
+  return { g, size: size.params.value };
+}
+
+/** The instance side: `centre` replaced by pivotBox; the rest of the tail as frozen. */
+function instanceSide(g: G): G {
   const out = structuredClone(g);
-  const size = out.nodes.find((n) => n.id === "size") as { params: { value: unknown } };
-  out.nodes = out.nodes.filter((n) => n.id !== "unitBox" && n.id !== "panels");
-  out.nodes.push(
-    { id: "shrunk", type: "placeBox", params: { size: sizeExpr ?? size.params.value, anchor: [0.5, 0.5, 0.5], fit: "allow" } },
-    { id: "panels", type: "boxesToMesh", params: {} },
-  );
-  out.connections = out.connections.filter((c) => c.to[0] !== "panels");
-  out.connections.push({ from: ["tint", "out"], to: ["shrunk", "in"] }, { from: ["shrunk", "out"], to: ["panels", "in"] });
-  out.outputs.push({ id: "shrunk", pin: "out", name: "shrunk" });
+  out.nodes = out.nodes.filter((n) => n.id !== "centre");
+  out.nodes.push({ id: "pivot", type: "pivotBox", params: {} });
+  out.connections = out.connections.filter((c) => c.to[0] !== "centre" && c.from[0] !== "centre");
+  out.connections.push({ from: ["jambs", "out"], to: ["pivot", "in"] }, { from: ["pivot", "out"], to: ["size", "in"] });
+  return out;
+}
+
+/** The mesh side: the cells after `jambs`, shrunk as a box (unless `shrink` is false), then boxesToMesh. */
+function meshSide(g: G, size: unknown, shrink = true): G {
+  const out = structuredClone(g);
+  out.nodes = out.nodes.filter((n) => !["centre", "size", "tint", "unitBox", "panels"].includes(n.id as string));
+  out.connections = out.connections.filter((c) => !["centre", "size", "tint", "panels"].includes(c.to[0]));
+  out.nodes.push({ id: "panels", type: "boxesToMesh", params: {} });
+  if (shrink) {
+    out.nodes.push({ id: "shrunk", type: "placeBox", params: { size, anchor: [0.5, 0.5, 0.5], fit: "allow" } });
+    out.connections.push({ from: ["jambs", "out"], to: ["shrunk", "in"] }, { from: ["shrunk", "out"], to: ["panels", "in"] });
+    out.outputs = [
+      { id: "shrunk", pin: "out", name: "boxes" },
+      { id: "panels", pin: "out", name: "panels" },
+    ];
+  } else {
+    out.connections.push({ from: ["jambs", "out"], to: ["panels", "in"] });
+    out.outputs = [
+      { id: "jambs", pin: "out", name: "boxes" },
+      { id: "panels", pin: "out", name: "panels" },
+    ];
+  }
   return out;
 }
 
@@ -90,21 +142,18 @@ interface Measure {
   differ: number;
   maxUlps: number;
   offFace: number;
+  tailOffFace: number;
+  sameTopology: boolean;
+  uvFrame: boolean;
+  uvChanged: number;
 }
 
-async function measure(
-  seed: number,
-  sizeExpr?: unknown,
-  tailToo = false,
-): Promise<Measure & { sameTopology: boolean; uvFrame: boolean; uvChanged: number; tailOffFace: number }> {
-  const base = load();
-  base.seed = seed;
-  if (tailToo) (base.nodes.find((n) => n.id === "size") as { params: { value: unknown } }).params.value = sizeExpr;
-  const tail = geo((await cook(deserializeGraph(base))).outputs.panels);
-  const next = dropIn(base, sizeExpr);
-  const res = await cook(deserializeGraph(next));
+async function measure(seed: number, sizeExpr?: unknown, shrink = true): Promise<Measure> {
+  const { g, size } = localBlocks(seed, sizeExpr);
+  const tail = geo((await cook(deserializeGraph(instanceSide(g)))).outputs.panels);
+  const res = await cook(deserializeGraph(meshSide(g, size, shrink)));
   const mesh = geo(res.outputs.panels);
-  const boxes = geo(res.outputs.shrunk);
+  const boxes = geo(res.outputs.boxes);
 
   const sameTopology =
     tail.pointCount === mesh.pointCount &&
@@ -115,10 +164,15 @@ async function measure(
   const pb = mesh.attrs.point.require("P").data;
   const lo = boxes.attrs.point.require("boundsMin").data;
   const hi = boxes.attrs.point.require("boundsMax").data;
+  const cellP = boxes.attrs.point.require("P").data;
+  // The stored faces in the world: f32(P + the stored coordinate). The
+  // cells are unrotated and unscaled, so that is the whole transform.
+  const wLo = (cell: number, k: number) => Math.fround(cellP[cell * 3 + k] + lo[cell * 3 + k]) + 0;
+  const wHi = (cell: number, k: number) => Math.fround(cellP[cell * 3 + k] + hi[cell * 3 + k]) + 0;
 
-  // The uv is the face frame (u along, v up — shellSplit's), not the box
-  // primitive's: unsubdivided, each component is 1 at the corner the
-  // frame axis runs TO and 0 at the one it runs from.
+  // The uv is the face frame (u along, v up — shellSplit's): unsubdivided,
+  // each component is 1 at the corner the frame axis runs TO and 0 at the
+  // one it runs from.
   const uvA = tail.attrs.point.require("uv").data;
   const uvB = mesh.attrs.point.require("uv").data;
   const side = mesh.attrs.point.require("boxSide").data;
@@ -128,10 +182,8 @@ async function measure(
     const cell = Math.floor(p / 24);
     const fr = FRAME[side[p]];
     for (const [c, [axis, sign]] of [fr.along, fr.up].entries()) {
-      const l = lo[cell * 3 + axis];
-      const h = hi[cell * 3 + axis];
-      if (l === h) continue;
-      const atMax = pb[p * 3 + axis] === h;
+      if (lo[cell * 3 + axis] === hi[cell * 3 + axis]) continue;
+      const atMax = pb[p * 3 + axis] === wHi(cell, axis);
       if (uvB[p * 2 + c] !== (sign > 0 ? (atMax ? 1 : 0) : atMax ? 0 : 1)) uvFrame = false;
     }
     if (uvA[p * 2] !== uvB[p * 2] || uvA[p * 2 + 1] !== uvB[p * 2 + 1]) uvChanged++;
@@ -146,8 +198,8 @@ async function measure(
     for (let k = 0; k < 3; k++) {
       const a = pa[p * 3 + k];
       const b = pb[p * 3 + k];
-      const l = lo[cell * 3 + k];
-      const h = hi[cell * 3 + k];
+      const l = wLo(cell, k);
+      const h = wHi(cell, k);
       if (b !== l && b !== h) offFace++;
       if (a !== l && a !== h) tailOffFace++;
       if (a !== b) {
@@ -159,12 +211,12 @@ async function measure(
   return { points: mesh.pointCount, coords: mesh.pointCount * 3, differ, maxUlps, offFace, tailOffFace, sameTopology, uvFrame, uvChanged };
 }
 
-describe("the unshrunk tail (scale = box(\"size\")) against boxesToMesh on the cells themselves", () => {
-  it("the tail's faces miss the stored box on some cells; the node's never do", async () => {
+describe('the unshrunk tail (scale = box("size")) against boxesToMesh on the cells themselves', () => {
+  it("the pivoted tail's faces miss the stored box on some cells; the node's never do", async () => {
     let tailOff = 0;
     let coords = 0;
     for (let seed = 1; seed <= 20; seed++) {
-      const m = await measure(seed, { fn: "box", name: "size" }, true);
+      const m = await measure(seed, { fn: "box", name: "size" }, false);
       expect(m.sameTopology).toBe(true);
       expect(m.offFace).toBe(0);
       expect(m.maxUlps).toBeLessThanOrEqual(1);
@@ -177,8 +229,8 @@ describe("the unshrunk tail (scale = box(\"size\")) against boxesToMesh on the c
   }, 60_000);
 });
 
-describe("boxesToMesh drops in for basics-split-box's former copyToPoints tail", () => {
-  it("same topology on 20 seeds; every new vertex on its stored box; the tail within one ulp of it; uv the face frame", async () => {
+describe("boxesToMesh against basics-split-box's cell-to-instance tail, pivotBox first", () => {
+  it("same topology on 20 seeds; every vertex on its stored box mapped through P; the tail within one ulp of it; uv the face frame", async () => {
     const rows: string[] = [];
     let totalDiffer = 0;
     let totalCoords = 0;
@@ -214,8 +266,31 @@ describe("boxesToMesh drops in for basics-split-box's former copyToPoints tail",
         { fn: "mul", args: [{ fn: "box", name: "sz" }, { fn: "select", args: [{ fn: "attributeIs", name: "piece", value: "opening" }, 0.2, 1] }] },
       ],
     };
-    const m = await measure(1, expr);
-    expect(m.sameTopology).toBe(true);
-    expect(m.maxUlps).toBeGreaterThan(100);
+    // The mesh side keeps the fixture's shrink; only the tail's is off.
+    const { g, size } = localBlocks(1);
+    const tail = geo((await cook(deserializeGraph(instanceSide(localBlocks(1, expr).g)))).outputs.panels);
+    const mesh = geo((await cook(deserializeGraph(meshSide(g, size)))).outputs.panels);
+    const pa = tail.attrs.point.require("P").data;
+    const pb = mesh.attrs.point.require("P").data;
+    let maxUlps = 0;
+    expect(tail.pointCount).toBe(mesh.pointCount);
+    for (let i = 0; i < mesh.pointCount * 3; i++) maxUlps = Math.max(maxUlps, Math.abs(pa[i] - pb[i]) / f32Ulp(pb[i]));
+    expect(maxUlps).toBeGreaterThan(100);
+  });
+
+  it("the frozen idiom, run as it stands, now counts P twice: its world corners land 2P out", async () => {
+    // The reason the sides above start from local blocks. The middle block
+    // sits at P = 0, so it is the outer two that move.
+    const g = load();
+    g.nodes = g.nodes.filter((n) => !["centre", "size", "tint", "unitBox", "panels"].includes(n.id as string));
+    g.connections = g.connections.filter((c) => !["centre", "size", "tint", "panels"].includes(c.to[0]));
+    g.nodes.push({ id: "panels", type: "boxesToMesh", params: {} });
+    g.connections.push({ from: ["jambs", "out"], to: ["panels", "in"] });
+    g.outputs = [{ id: "panels", pin: "out", name: "panels" }];
+    const p = geo((await cook(deserializeGraph(g))).outputs.panels).attrs.point.require("P").data;
+    let xMax = -Infinity;
+    for (let i = 0; i < p.length; i += 3) xMax = Math.max(xMax, p[i]);
+    // The east block's box runs to 8 + 4; read twice through P, to 2 * 8 + 4.
+    expect(xMax).toBe(20);
   });
 });

@@ -11,6 +11,7 @@
 import { describe, expect, it } from "vitest";
 import { Geometry, createPointCloud } from "../data/index.js";
 import { Graph, type NodeHandle, cook, makeGeometryItem } from "../graph/index.js";
+import { Pcg32 } from "../random/index.js";
 import {
   deserializeGraph,
   fieldFromJson,
@@ -321,7 +322,6 @@ describe("boxesToMesh: what it carries", () => {
     piece.setString(0, "wall");
     piece.setString(1, "roof");
     pts.require("color").setTuple(1, [0.5, 0.25, 0.125, 1]);
-    pts.require("P").setTuple(1, [9, 9, 9]);
     pts.require("scale").setTuple(1, [3, 3, 3]);
     pts.require("rot").setTuple(1, [0, Math.SQRT1_2, 0, Math.SQRT1_2]);
     geo.attrs.detail.add("lot", "f32", 1, 0).set(0, 7);
@@ -337,22 +337,15 @@ describe("boxesToMesh: what it carries", () => {
     expect(tuples(out, "color", 4)[15]).toEqual([0.5, 0.25, 0.125, 1]);
     expect(tuples(out, "boundsMax", 3)[15]).toEqual([3, 2, 1]);
     expect(col(out, "lot", "detail")).toEqual([7]);
-    // P comes from the box alone: the cell's P, rot and scale are not read.
+    // P is built THROUGH the cell's transform: cell 1 is turned +90 about
+    // y (x -> -z, z -> x) and scaled 3, so its north face (z = 1, the
+    // points x fastest then y) lands at x = 3, z = -3 * x.
     expect(tuples(out, "P", 3).slice(8, 12)).toEqual([
-      [2, 0, 1],
-      [3, 0, 1],
-      [2, 2, 1],
-      [3, 2, 1],
+      [3, 0, -6],
+      [3, 0, -9],
+      [3, 6, -6],
+      [3, 6, -9],
     ]);
-  });
-
-  it("a ROTATED, scaled, moved cell gets exactly the mesh an untransformed one does", async () => {
-    const plain = cells([[[1, 2, 3], [4, 6, 8]]]);
-    const turned = cells([[[1, 2, 3], [4, 6, 8]]]);
-    turned.attrs.point.require("rot").setTuple(0, [0.5, 0.5, 0.5, 0.5]);
-    turned.attrs.point.require("scale").setTuple(0, [2, -1, 3]);
-    turned.attrs.point.require("P").setTuple(0, [-5, 0, 5]);
-    expect(snapshotGeometry(await mesh(turned, { normals: true }))).toEqual(snapshotGeometry(await mesh(plain, { normals: true })));
   });
 
   it("does not write its input", async () => {
@@ -360,6 +353,217 @@ describe("boxesToMesh: what it carries", () => {
     const before = snapshotGeometry(geo);
     await mesh(geo, { cellAttr: "c", normals: true });
     expect(snapshotGeometry(geo)).toEqual(before);
+  });
+});
+
+describe("boxesToMesh: through the cell's transform", () => {
+  // The oracle: the rotation MATRIX of the normalized quaternion, built
+  // here from its entries (not through the node's helpers), the world
+  // point P + R * (S * x) in f64, and properties read off the world
+  // triangles themselves.
+  type T = { P: number[]; rot: number[]; scale: number[] };
+  const matrix = (q: number[]): number[][] => {
+    const len = Math.hypot(...q);
+    const [x, y, z, w] = len === 0 ? [0, 0, 0, 1] : q.map((c) => c / len);
+    return [
+      [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+      [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+      [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+    ];
+  };
+  const apply = (t: T, x: number[]): number[] => {
+    const R = matrix(t.rot);
+    const s = [0, 1, 2].map((a) => x[a] * t.scale[a]);
+    return [0, 1, 2].map((r) => t.P[r] + R[r][0] * s[0] + R[r][1] * s[1] + R[r][2] * s[2]);
+  };
+  const sub3 = (a: number[], b: number[]) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const cross = (a: number[], b: number[]) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const dot = (a: number[], b: number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const ulp = (x: number): number => {
+    const a = Math.abs(Math.fround(x));
+    return a === 0 ? 2 ** -149 : 2 ** (Math.max(Math.floor(Math.log2(a)), -126) - 23);
+  };
+  const stamp = (geo: Geometry, ts: T[]): Geometry => {
+    ts.forEach((t, i) => {
+      geo.attrs.point.require("P").setTuple(i, t.P);
+      geo.attrs.point.require("rot").setTuple(i, t.rot);
+      geo.attrs.point.require("scale").setTuple(i, t.scale);
+    });
+    return geo;
+  };
+  const stored = (t: T): T => ({ P: t.P.map(Math.fround), rot: t.rot.map(Math.fround), scale: t.scale.map(Math.fround) });
+  const H = Math.SQRT1_2;
+  const TURNS = [
+    [0, 0, 0, 1],
+    [0, 0, 0, -1],
+    [0, 1, 0, 0],
+    [0, H, 0, H],
+    [H, 0, 0, H],
+    [0, 0, H, -H],
+    [0, 0, 0, 0], // a zero quaternion is the identity
+  ];
+
+  it("a pure translation adds P to every vertex, rounded once; uv, normals, codes and triangles unchanged", async () => {
+    const box: Box = [[0.1, -2, 3], [4.7, 6, 8.3]];
+    const plain = await mesh(cells([box]), { normals: true, subdivisions: [3, 2, 2] });
+    const moved = await mesh(stamp(cells([box]), [{ P: [1000.25, -3.1, 5e-3], rot: [0, 0, 0, 1], scale: [1, 1, 1] }]), {
+      normals: true,
+      subdivisions: [3, 2, 2],
+    });
+    const P = [Math.fround(1000.25), Math.fround(-3.1), Math.fround(5e-3)];
+    // The plain mesh's vertex is f32(x); x itself is f32 here only at the
+    // corners, so the interior lines are compared against the oracle below.
+    const pm = col(moved, "P");
+    const pp = col(plain, "P");
+    const lo = box[0].map(Math.fround);
+    const hi = box[1].map(Math.fround);
+    for (let i = 0; i < pm.length; i++) {
+      const k = i % 3;
+      if (pp[i] === lo[k] || pp[i] === hi[k]) expect(pm[i]).toBe(Math.fround(P[k] + pp[i]) + 0);
+    }
+    for (const name of ["uv", "normal", "boxSide"]) expect(col(moved, name)).toEqual(col(plain, name));
+    expect(tris(moved)).toEqual(tris(plain));
+  });
+
+  it("a ROTATED, scaled, mirrored, zero-scaled cell: every vertex where P + R(S x) puts it, every triangle facing out, its normal its winding's, its uv unmirrored", async () => {
+    const rng = new Pcg32(0xb0e5, 2);
+    const r = () => rng.nextF32();
+    const pick = <V,>(a: readonly V[]): V => a[Math.floor(r() * a.length)];
+    let mirrored = 0;
+    let worstUlps = 0;
+    let triangles = 0;
+    for (let trial = 0; trial < 120; trial++) {
+      const lo = [r() * 20 - 10, r() * 20 - 10, r() * 20 - 10].map(Math.fround);
+      const hi = lo.map((l) => Math.fround(l + 0.5 + r() * 6));
+      const rk = trial % 4;
+      const rot = rk < 2 ? pick(TURNS) : [r() - 0.5, r() - 0.5, r() - 0.5, r() - 0.5]; // random, not unit
+      const sk = Math.floor(r() * 4);
+      const scale =
+        sk === 0
+          ? [1, 1, 1]
+          : sk === 1
+            ? [pick([-1, 2, 0.5]), pick([1, -2, -0.25]), pick([-3, 1, 4])]
+            : sk === 2
+              ? [r() * 4 - 2, r() * 4 - 2, r() * 4 - 2]
+              : [0, pick([1, -1]), 2];
+      const t = stored({ P: trial % 3 === 0 ? [0, 0, 0] : [r() * 2000 - 1000, r() * 200, r() * 2000 - 1000], rot, scale });
+      const flip = trial % 5 === 0;
+      const sub = [1 + Math.floor(r() * 3), 1 + Math.floor(r() * 3), 1 + Math.floor(r() * 3)];
+      // The same cell untransformed gives the local grid points (its P is 0).
+      const plain = await mesh(cells([[lo, hi]]), { subdivisions: sub, flip });
+      const out = await mesh(stamp(cells([[lo, hi]]), [t]), { normals: true, subdivisions: sub, flip });
+      const local = tuples(plain, "P", 3);
+      const world = tuples(out, "P", 3);
+      const n = tuples(out, "normal", 3);
+      const uv = tuples(out, "uv", 2);
+      const mag = Math.max(...t.P.map(Math.abs)) + Math.max(...t.scale.map(Math.abs)) * Math.max(...lo.map(Math.abs), ...hi.map(Math.abs)) * 2;
+      // Positions: the node's f32 against the oracle's f64, in ulps of the
+      // cell's magnitude (a coordinate near 0 has no ulp of its own). The
+      // local point is itself an f32 rounding of an interior grid line,
+      // which the scale carries: the bound is 1 ulp plus that.
+      for (let i = 0; i < world.length; i++) {
+        const want = apply(t, local[i]);
+        for (let k = 0; k < 3; k++) worstUlps = Math.max(worstUlps, Math.abs(world[i][k] - want[k]) / ulp(mag));
+      }
+      if (t.scale.filter((s) => s < 0).length % 2 === 1) mirrored++;
+      const centre = apply(t, [0, 1, 2].map((a) => (lo[a] + hi[a]) / 2));
+      for (const [a, b, c] of tris(out)) {
+        // The normal is unit and flat on the face.
+        expect(Math.hypot(...n[a])).toBeCloseTo(1, 6);
+        expect(n[b]).toEqual(n[a]);
+        const g = cross(sub3(world[b], world[a]), sub3(world[c], world[a]));
+        const area = Math.hypot(...g);
+        if (area < 1e-6 * mag * mag) continue; // a face a zero scale flattened
+        triangles++;
+        // The winding's normal IS the stored normal (counter-clockwise
+        // seen from the side it faces) ...
+        expect(dot(g, n[a]) / area).toBeGreaterThan(0.999);
+        // ... and that side is OUTSIDE (inside under flip).
+        const o = sub3(world[a], centre);
+        if (Math.abs(dot(o, n[a])) > 1e-6 * mag) expect(Math.sign(dot(o, n[a]))).toBe(flip ? -1 : 1);
+        // The uv is unmirrored seen from that side: counter-clockwise too.
+        const uvArea = (uv[b][0] - uv[a][0]) * (uv[c][1] - uv[a][1]) - (uv[b][1] - uv[a][1]) * (uv[c][0] - uv[a][0]);
+        expect(uvArea).toBeGreaterThan(0);
+      }
+    }
+    expect(mirrored).toBeGreaterThan(10);
+    expect(triangles).toBeGreaterThan(4000);
+    // Measured: 4444 triangles over 120 cells, 36 of them mirrored, every
+    // vertex within 0.55 f32 ulps of the cell's magnitude.
+    expect(worstUlps).toBeLessThanOrEqual(1);
+  });
+
+  it("a quarter turn stored in f32 moves every vertex EXACTLY, and its normals are exact axes", async () => {
+    // +90 about z: x -> y, y -> -x. The box [1, 2] x [0, 3] x [-1, 1] at
+    // P = (10, 0, 0), scale 1: its east face (x = 2, points y fastest then
+    // z) lands on world y = 2, world x = 10 - y.
+    const out = await mesh(stamp(cells([[[1, 0, -1], [2, 3, 1]]]), [{ P: [10, 0, 0], rot: [0, 0, H, H], scale: [1, 1, 1] }]), {
+      faces: ["east"],
+      normals: true,
+    });
+    expect(tuples(out, "P", 3)).toEqual([
+      [10, 2, -1],
+      [7, 2, -1],
+      [10, 2, 1],
+      [7, 2, 1],
+    ]);
+    expect(tuples(out, "normal", 3)).toEqual(Array(4).fill([0, 1, 0]));
+  });
+
+  it("a scale of 0 or -0 is not a mirror: the faces across it keep a unit normal, the triangles their winding", async () => {
+    const unturned = await mesh(cells([[[0, 0, 0], [1, 1, 1]]]), { normals: true });
+    for (const z of [0, -0]) {
+      const out = await mesh(stamp(cells([[[0, 0, 0], [1, 1, 1]]]), [{ P: [0, 0, 0], rot: [0, 0, 0, 1], scale: [z, 1, 1] }]), { normals: true });
+      const n = tuples(out, "normal", 3);
+      // east (+x) first, then west: +x and -x, never a zero normal.
+      expect(n[0]).toEqual([1, 0, 0]);
+      expect(n[4]).toEqual([-1, 0, 0]);
+      for (const v of col(out, "normal")) expect(Object.is(v, -0)).toBe(false);
+      expect(tris(out)).toEqual(tris(unturned));
+    }
+    // CONTROL: a negative scale on x does turn the triangles round.
+    const neg = await mesh(stamp(cells([[[0, 0, 0], [1, 1, 1]]]), [{ P: [0, 0, 0], rot: [0, 0, 0, 1], scale: [-1, 1, 1] }]), { normals: true });
+    expect(tris(neg)).not.toEqual(tris(unturned));
+    expect(tuples(neg, "normal", 3)[0]).toEqual([-1, 0, 0]);
+  });
+
+  it("siblings of one root share their face's vertices BIT FOR BIT under a random transform", async () => {
+    const rng = new Pcg32(0x51b, 4);
+    const r = () => rng.nextF32();
+    const shared = (geo: Geometry): [string[], string[]] => {
+      const P = tuples(geo, "P", 3);
+      const c = col(geo, "c");
+      // faces ["east", "west"]: cell 0's east face (its first 4 points) and
+      // cell 1's west face (its points 4..8) are the shared plane.
+      return [P.filter((_, i) => c[i] === 0).slice(0, 4).map((p) => p.join()).sort(), P.filter((_, i) => c[i] === 1).slice(4, 8).map((p) => p.join()).sort()];
+    };
+    for (let trial = 0; trial < 40; trial++) {
+      const t = stored({ P: [r() * 900, r() * 90, -r() * 900], rot: [r() - 0.5, r() - 0.5, r() - 0.5, r() - 0.5], scale: [0.5 + r(), 0.5 + r(), -(0.5 + r())] });
+      const cut = Math.fround(r() * 3 + 0.1);
+      // Two pieces of one box cut at x = cut: the stored cut is ONE number.
+      const pair = stamp(cells([[[-1.3, 0, -0.7], [cut, 2.9, 1.1]], [[cut, 0, -0.7], [4.3, 2.9, 1.1]]]), [t, t]);
+      const [a, b] = shared(await mesh(pair, { faces: ["east", "west"], cellAttr: "c" }));
+      expect(b).toEqual(a);
+    }
+    // CONTROL: the comparison sees a cut one ulp apart.
+    const t = stored({ P: [3, 1, 2], rot: [0.1, 0.7, 0.2, 0.6], scale: [1.3, 1, 0.7] });
+    const cut = Math.fround(1.7);
+    const apart = stamp(cells([[[-1, 0, 0], [cut, 1, 1]], [[cut + ulp(cut), 0, 0], [3, 1, 1]]]), [t, t]);
+    const [a, b] = shared(await mesh(apart, { faces: ["east", "west"], cellAttr: "c" }));
+    expect(b).not.toEqual(a);
+  });
+
+  it("a missing rot or scale column is the identity; a non-finite one is refused naming the cell", async () => {
+    const geo = cells([[[0, 0, 0], [1, 1, 1]]]);
+    geo.attrs.point.require("P").setTuple(0, [5, 0, 0]);
+    geo.attrs.point.remove("rot");
+    geo.attrs.point.remove("scale");
+    expect(tuples(await mesh(geo, { faces: ["west"] }), "P", 3)[0]).toEqual([5, 0, 0]);
+    const bad = stamp(cells([[[0, 0, 0], [1, 1, 1]], [[0, 0, 0], [1, 1, 1]]]), [
+      { P: [0, 0, 0], rot: [0, 0, 0, 1], scale: [1, 1, 1] },
+      { P: [0, 0, 0], rot: [0, Number.NaN, 0, 1], scale: [1, 1, 1] },
+    ]);
+    expect(await rejection(mesh(bad))).toMatch(/boxesToMesh: cell 1 has a non-finite "rot"/);
   });
 });
 
@@ -477,10 +681,9 @@ describe("boxesToMesh: determinism and JSON", () => {
       box: () =>
         g.add(
           setBounds,
-          {
-            boundsMin: fieldFromJson({ fn: "position" }),
-            boundsMax: f('position() + vec(1 + floor(randomField("w") * 4), 6, 4)'),
-          },
+          // A box standing at each grid point by its min corner, in the
+          // point's own frame (the mesh adds P).
+          { anchor: "min", size: f('vec(1 + floor(randomField("w") * 4), 6, 4)') },
           "box",
         ),
       tint: () => g.add(setAttribute, { name: "r", type: "f32", value: fieldFromJson({ fn: "randomField", key: "r" }) }, "tint"),

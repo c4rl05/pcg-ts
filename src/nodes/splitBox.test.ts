@@ -1247,13 +1247,19 @@ describe("splitBox: the corpus teaching graph", () => {
     const lo = col(out, "boundsMin");
     const hi = col(out, "boundsMax");
     const door = col(out, "door");
+    // The bounds are local to each piece's transform; the blocks' points sit
+    // at x = -8, 0, 8 (y = z = 0, identity rot, unit scale), so a piece's
+    // WORLD x is its P.x plus the bound.
+    const P = col(out, "P");
+    const wx0 = (i: number): number => P[i * 3] + lo[i * 3];
+    const wx1 = (i: number): number => P[i * 3] + hi[i * 3];
     expect(new Set(piece)).toEqual(new Set(["plinth", "cornice", "wall", "opening"]));
     // Three blocks, 8 wide, x centred on -8, 0 and 8: the pieces of each
     // tile its face exactly — no gap, no overlap — so their areas sum to
     // the block's, and the block's height is 1.5 + 3 * storeys.
     const heights = new Set<number>();
     for (const cx of [-8, 0, 8]) {
-      const mine = piece.map((_, i) => i).filter((i) => lo[i * 3] >= cx - 4 && hi[i * 3] <= cx + 4);
+      const mine = piece.map((_, i) => i).filter((i) => wx0(i) >= cx - 4 && wx1(i) <= cx + 4);
       const top = Math.max(...mine.map((i) => hi[i * 3 + 1]));
       const storeys = (top - 1.5) / 3;
       expect(Number.isInteger(storeys) && storeys >= 2 && storeys <= 4).toBe(true);
@@ -1262,7 +1268,7 @@ describe("splitBox: the corpus teaching graph", () => {
       expect(area).toBeCloseTo(8 * top, 4);
       // Bays cut on the 0.5 lattice into 2.5 | 3 | 2.5, each opening the
       // middle half of its bay.
-      const xs = new Set(mine.filter((i) => piece[i] === "opening").map((i) => lo[i * 3] - (cx - 4)));
+      const xs = new Set(mine.filter((i) => piece[i] === "opening").map((i) => wx0(i) - (cx - 4)));
       expect([...xs].sort((a, b) => a - b)).toEqual([0.625, 3.25, 6.125]);
       // One door per block: on the ground storey's middle bay, standing on
       // the plinth with no wall under it.

@@ -2187,7 +2187,7 @@ function specHeight(spec: unknown): number {
 /**
  * The refusal for a domain whose elements carry no box. On the POINT
  * domain both corners are standard attributes (`createPointCloud` adds
- * them, a zero box at the origin until something sets one), so this fires
+ * them, a zero box at the point's own P until something sets one), so this fires
  * only where a node removed one, or on a vertex, primitive or detail
  * domain, which has no standard box at all.
  */
@@ -2222,9 +2222,11 @@ register(
       "kernel. A fn rather than bare names, so it never collides with a `let` binding or an attribute: " +
       "a let may bind `x0` and read `box(\"x0\")` beside it. Inside a node param it reads the box " +
       "that node is HANDED: setBounds resolves both corners against the incoming box before writing " +
-      "either, and splitBox resolves `sizes` on the parent cell. Every point carries a box (a zero " +
-      "box at the origin until setBounds or splitBox writes one); a domain missing either column " +
-      "refuses at evaluation, naming setBounds.",
+      "either, and splitBox resolves `sizes` on the parent cell. A box is an extent in its point's own " +
+      "frame (world = P + rot * (scale * x)), so the names are in that frame: `center` is the box's " +
+      "centre relative to P, not a world position. Every point carries a box (a zero box AT its P " +
+      "until setBounds or splitBox writes one); a domain missing either column refuses at " +
+      "evaluation, naming setBounds.",
   },
   (spec, path) => {
     const raw = spec.name;

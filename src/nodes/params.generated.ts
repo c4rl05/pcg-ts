@@ -704,14 +704,15 @@ export interface BoxesToMeshParams {
    */
   faces: readonly string[];
   /**
-   * Quads per WORLD axis [x, y, z] — meshPrimitive's param, with its reading: whole numbers,
+   * Quads per BOX axis [x, y, z] — meshPrimitive's param, with its reading: whole numbers,
    * at least 1, and each face takes the two axes that span it (the floor and ceiling x and
-   * z, the south and north walls x and y, the west and east walls y and z), so [1, 1, 1] is
-   * two triangles per face. A single number, plain or a field, broadcasts to all three. As a
-   * FIELD it is resolved per cell on the input, with the cell's box names —
-   * vec(max(floor(box("sx")), 1), max(floor(box("sy")), 1), 1) cuts every box into roughly
-   * unit quads. A count that is not a whole number of at least 1 is refused naming the cell
-   * (make it one with max(floor(...), 1)).
+   * z, the south and north walls x and y, the west and east walls y and z, all the box's own
+   * axes), so [1, 1, 1] is two triangles per face. A single number, plain or a field,
+   * broadcasts to all three. As a FIELD it is resolved per cell on the input, with the
+   * cell's box names — vec(max(floor(box("sx")), 1), max(floor(box("sy")), 1), 1) cuts every
+   * box into roughly unit quads (in the box's own units: a cell's scale stretches them). A
+   * count that is not a whole number of at least 1 is refused naming the cell (make it one
+   * with max(floor(...), 1)).
    *
    * - Range: `>= 1`
    * - Accepts a field.
@@ -729,13 +730,14 @@ export interface BoxesToMeshParams {
    */
   flip: boolean;
   /**
-   * Write a `normal` point attribute (f32 tuple 3): each face's unit outward axis (inward
-   * under `flip`) on every one of its points — flat faces and hard edges, exact because
-   * faces share no points. Off by default, as on meshPrimitive: the renderer computes one
-   * from the triangles when none is stored, and a stored normal is only right until
-   * something moves P. Turn it on when this mesh is merged with one that carries a normal
-   * (mergePrimitives fills a missing column with (0, 0, 0), which a lit material renders
-   * black).
+   * Write a `normal` point attribute (f32 tuple 3): each face's unit outward normal in the
+   * world (inward under `flip`) — the face's own box axis turned by the cell's rotation, its
+   * sign turned by a negative scale on that axis — on every one of its points: flat faces
+   * and hard edges, exact because faces share no points. Off by default, as on
+   * meshPrimitive: the renderer computes one from the triangles when none is stored, and a
+   * stored normal is only right until something moves P. Turn it on when this mesh is merged
+   * with one that carries a normal (mergePrimitives fills a missing column with (0, 0, 0),
+   * which a lit material renders black).
    *
    * @defaultValue `false`
    */
@@ -6039,16 +6041,18 @@ export type SetAttributeOutputs = "out";
  */
 export interface SetBoundsParams {
   /**
-   * Minimum corner written to every point's boundsMin, in world units. As a FIELD it is PER
-   * POINT, which is the reading that makes this node worth more than a constant: an extent
-   * derived from the point's own `scale`, or from a species attribute, gives every instance
-   * the box it actually occupies rather than one box the whole cloud shares. Must evaluate
-   * to THREE numbers per point — a scalar is REFUSED rather than broadcast, because
-   * broadcasting would quietly hand every point a cube when a box was asked for. Both
-   * corners are resolved against the INPUT geometry before either is written, so a field
-   * here reading `boundsMax` — or any box name, box("hi") or box("size") — sees the box this
-   * cook was HANDED, never one this node produced: `vec(box("x0"), box("y0") + 1,
-   * box("z0"))` raises the floor of the incoming box by 1.
+   * Minimum corner written to every point's boundsMin, in the point's own frame (world = P +
+   * rot * (scale * x); [0, 0, 0] is the point). As a FIELD it is PER POINT, which is the
+   * reading that makes this node worth more than a constant: an extent derived from a
+   * species attribute gives every instance the box it actually occupies rather than one box
+   * the whole cloud shares. Must evaluate to THREE numbers per point — a scalar is REFUSED
+   * rather than broadcast, because broadcasting would quietly hand every point a cube when a
+   * box was asked for. Both corners are resolved against the INPUT geometry before either is
+   * written, so a field here reading `boundsMax` — or any box name, box("hi") or box("size")
+   * — sees the box this cook was HANDED, never one this node produced: `vec(box("x0"),
+   * box("y0") + 1, box("z0"))` raises the floor of the incoming box by 1. Box names are in
+   * the same frame, so that rewrite keeps the box where it was. A corner built from
+   * position() counts P twice: the corners are already relative to P.
    *
    * - Accepts a field.
    *
@@ -6056,15 +6060,16 @@ export interface SetBoundsParams {
    */
   boundsMin: FieldParam;
   /**
-   * Maximum corner written to every point's boundsMax, in world units. As a FIELD it is PER
-   * POINT, on the same terms as boundsMin, and refuses a scalar for the same reason. Nothing
-   * here checks that max exceeds min: the two are written independently, and a point whose
-   * corners cross is a point with an inside-out box, which is what the author asked for and
-   * what a downstream reader will see. Independently RESOLVED, too: a field here reading
-   * `boundsMin` sees the input's corner rather than the one this cook just wrote, so the two
-   * params cannot observe each other in either order. Both corners are standard point
-   * attributes, so a field naming one always finds it; a geometry with the column
-   * deliberately removed refuses here rather than resolving to a silent zero.
+   * Maximum corner written to every point's boundsMax, in the point's own frame, as
+   * boundsMin. As a FIELD it is PER POINT, on the same terms as boundsMin, and refuses a
+   * scalar for the same reason. Nothing here checks that max exceeds min: the two are
+   * written independently, and a point whose corners cross is a point with an inside-out
+   * box, which is what the author asked for and what a downstream reader will see.
+   * Independently RESOLVED, too: a field here reading `boundsMin` sees the input's corner
+   * rather than the one this cook just wrote, so the two params cannot observe each other in
+   * either order. Both corners are standard point attributes, so a field naming one always
+   * finds it; a geometry with the column deliberately removed refuses here rather than
+   * resolving to a silent zero.
    *
    * - Accepts a field.
    *
@@ -6073,15 +6078,14 @@ export interface SetBoundsParams {
   boundsMax: FieldParam;
   /**
    * How the box is said. "corners" (the default): `boundsMin` and `boundsMax` are the box,
-   * as given; P and `size` are not read. The other three build a `size` box at each point's
-   * P, in WORLD axes (rot and scale are not read): "center" centres it on P (min = P - size
-   * / 2); "baseCenter" centres it in x and z and puts its min y AT P, so the box stands on
-   * its point (a building on its lot, a block on a scattered point); "min" puts its min
-   * corner at P (min = P, max = P + size). P goes INTO the box, so what these three write is
-   * the WORLD box the box nodes read, not a local extent in the point's own frame (that one
-   * is "corners"). Under those three the corners are not read and must stay at their
-   * defaults ([0, 0, 0] and [1, 1, 1]); a corner set there is refused rather than ignored.
-   * Decided once per cook.
+   * as given; `size` is not read. The other three size a `size` box ABOUT the point, in its
+   * own frame (P, rot and scale are not read; the point's transform places the box):
+   * "center" centres it on P (min = -size / 2, max = size / 2); "baseCenter" centres it in x
+   * and z and puts its min y AT P, so the box stands on its point (a building on its lot, a
+   * block on a scattered point); "min" puts its min corner at P (min = [0, 0, 0], max =
+   * size). Under those three the corners are not read and must stay at their defaults ([0,
+   * 0, 0] and [1, 1, 1]); a corner set there is refused rather than ignored. Decided once
+   * per cook.
    *
    * - Enum: `"corners"` | `"center"` | `"baseCenter"` | `"min"`
    *
@@ -6089,16 +6093,15 @@ export interface SetBoundsParams {
    */
   anchor: "corners" | "center" | "baseCenter" | "min";
   /**
-   * The box's extent per WORLD axis [x, y, z], in world units, read only when `anchor` is
-   * "center", "baseCenter" or "min" — under "corners" it must stay at its default [1, 1, 1],
-   * and a size set there is refused rather than ignored. As a FIELD it is resolved PER
-   * POINT, three components or one broadcast to all three: vec(4, 3 + randomField("h") * 9,
-   * 4) gives every point its own height, attribute("scale", 3) * 4 a box from the point's
-   * own scale (which the node does not apply by itself). Resolved against the INPUT, so a
-   * box name here reads the box the point was handed. A plain value is three lengths or ONE,
-   * a cube, as a scalar field is. Each component is a length >= 0: 0 gives a box of no
-   * volume on that axis, which is kept; a negative one is refused naming the point, and a
-   * non-finite one is refused.
+   * The box's extent per box axis [x, y, z], in the point's own units (a point's scale
+   * multiplies it in the world), read only when `anchor` is "center", "baseCenter" or "min"
+   * — under "corners" it must stay at its default [1, 1, 1], and a size set there is refused
+   * rather than ignored. As a FIELD it is resolved PER POINT, three components or one
+   * broadcast to all three: vec(4, 3 + randomField("h") * 9, 4) gives every point its own
+   * height. Resolved against the INPUT, so a box name here reads the box the point was
+   * handed. A plain value is three lengths or ONE, a cube, as a scalar field is. Each
+   * component is a length >= 0: 0 gives a box of no volume on that axis, which is kept; a
+   * negative one is refused naming the point, and a non-finite one is refused.
    *
    * - Range: `>= 0`
    * - Accepts a field.

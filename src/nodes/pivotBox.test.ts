@@ -15,6 +15,7 @@ import { Graph, type NodeHandle, cook, makeGeometryItem } from "../graph/index.j
 import { Pcg32 } from "../random/index.js";
 import { deserializeGraph, fieldFromJson, parseFieldText, pointGrid, serializeGraph, setBounds } from "./index.js";
 import "../spawn/index.js";
+import { boxesToMesh } from "./boxesToMesh.js";
 import { pivotBox } from "./pivotBox.js";
 import { firstGeo, runNode } from "./nodes.testsupport.js";
 
@@ -438,6 +439,51 @@ describe("pivotBox: refusals", () => {
     geo.attrs.point.remove("rot");
     geo.attrs.point.add("rot", "f32", 3, 0);
     expect(await rejection(pivot(geo))).toMatch(/"rot" on pin "in" is f32 tupleSize 3/);
+  });
+});
+
+describe("pivotBox, then boxesToMesh", () => {
+  it("builds the mesh boxesToMesh builds from the unpivoted cells, to within 1 f32 ulp of the cell's magnitude, uv, normals and triangles identical", async () => {
+    const rng = new Pcg32(0x7e5, 9);
+    const list = Array.from({ length: 400 }, () => stored(randomCell(rng)));
+    const geo = cloud(list);
+    const meshOf = async (g: Geometry) =>
+      firstGeo((await runNode(boxesToMesh, { normals: true, subdivisions: [2, 1, 3] }, { in: [makeGeometryItem(g)] }, 1)).out);
+    const a = await meshOf(geo);
+    const b = await meshOf(await pivot(geo));
+    for (const name of ["uv", "normal", "boxSide"]) expect(col(b, name)).toEqual(col(a, name));
+    expect(Array.from(b.vertexToPoint)).toEqual(Array.from(a.vertexToPoint));
+    const pa = col(a, "P");
+    const pb = col(b, "P");
+    const per = pa.length / list.length;
+    let differ = 0;
+    let worst = 0;
+    for (let i = 0; i < pa.length; i++) {
+      const c = list[Math.floor(i / per)];
+      const mag = Math.max(...c.P.map(Math.abs)) + Math.max(...c.scale.map(Math.abs)) * Math.max(...c.lo.map(Math.abs), ...c.hi.map(Math.abs)) * 2;
+      if (pa[i] !== pb[i]) differ++;
+      worst = Math.max(worst, Math.abs(pa[i] - pb[i]) / ulp(mag));
+    }
+    // Measured: 15590 of 62400 coordinates differ (these cells straddle 0
+    // and spread over 12 binades, so P' and the shifted corners round), by
+    // at most 1.0 ulp of the cell's magnitude.
+    expect(worst).toBeLessThanOrEqual(1);
+    expect(differ).toBeGreaterThan(0);
+    expect(differ).toBe(15590);
+  });
+
+  it("is bit-identical for dyadic cells at dyadic P under quarter and half turns", async () => {
+    const h = Math.fround(Math.SQRT1_2);
+    const turns: Q[] = [[0, 0, 0, 1], [0, 1, 0, 0], [0, h, 0, h], [h, 0, 0, h], [0, 0, h, h]];
+    const rng = new Pcg32(0xd1b, 2);
+    const dy = (r: number) => Math.round((rng.nextF32() * 2 - 1) * r * 8) / 8;
+    const list: Cell[] = Array.from({ length: 200 }, (_, i) => {
+      const lo: V3 = [dy(40), dy(40), dy(40)];
+      return { P: [dy(500), dy(500), dy(500)], rot: turns[i % turns.length], scale: [[1, 2, -0.5][i % 3], 1, [4, -1, 1][(i >> 1) % 3]], lo, hi: lo.map((l) => l + Math.abs(dy(20)) + 0.125) as V3 };
+    });
+    const meshOf = async (g: Geometry) => col(firstGeo((await runNode(boxesToMesh, {}, { in: [makeGeometryItem(g)] }, 1)).out), "P");
+    const geo = cloud(list);
+    expect(await meshOf(await pivot(geo))).toEqual(await meshOf(geo));
   });
 });
 

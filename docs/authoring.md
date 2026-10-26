@@ -776,8 +776,10 @@ An unknown name is refused naming the sixteen valid ones, with a
 did-you-mean: `box name "sX" is not one; did you mean "sx"? ...`.
 
 On points it never fails for want of a box: `createPointCloud` adds both
-corners as standard attributes, a zero box at the origin until
-`setBounds` or `splitBox` writes one. A domain missing either column — a
+corners as standard attributes, a zero box AT the point's own P until
+`setBounds` or `splitBox` writes one. The box is an extent in the point's
+own frame (world = P + rot * (scale * x)), and so are the names: `center`
+is the box's centre relative to P, not a world position. A domain missing either column — a
 point domain a node removed one from, or a vertex, primitive or detail
 domain, which has no standard box — refuses at EVALUATION with an
 `attribute-not-found` error prefixed `box("sx"): ` that names `setBounds`
