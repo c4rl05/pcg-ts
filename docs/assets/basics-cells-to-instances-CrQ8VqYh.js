@@ -1,0 +1,325 @@
+var e=`{
+  "formatVersion": 1,
+  "seed": 1207,
+  "meta": {
+    "title": "Hand a grammar's cells to instances",
+    "description": "A grammar CUTS boxes; a renderer often wants INSTANCES, one copy of an asset per piece, and the two disagree about where a piece is. A cell's box is an extent in its point's OWN frame (world = P + rot * (scale * x)), and every piece splitBox cuts keeps its root's P, rot and scale bit for bit, which is what lets neighbouring pieces meet exactly. An instance is placed AT its point. \`pivotBox\` is the hand-off: it moves each piece's P to a point of its box (\`pivot\`, a fraction per box axis; [0.5, 0.5, 0.5] is the centre) and re-expresses the box about it, so the box does not move in the world.\\n\\nThree lots stand in a row, turned 0, 30 and 90 degrees about y by their \`rot\` column. \`block\` gives each the same box as LOCAL corners about its point, setBounds [-4, 0, -3] to [4, 9, 3]: 8 wide, 9 tall, 6 deep, standing on the lot. \`floors\` cuts it into three floors of 3 and \`bays\` each floor into four bays of 2. Nothing in the grammar reads rot: the cuts are made in the block's own frame, so the bays turn with it.\\n\\nAfter \`pivot\`, \`fit\` sets each piece's scale to its box size less 0.2, mul(attribute(\\"scale\\", 3), sub(box(\\"size\\"), 0.2)) (times the scale it inherited, 1 here), which opens a gap of 0.2 between neighbours about each bay's own centre. \`unit\` then gives every piece the unit box [-0.5, 0.5], the extent the asset fills, so P + rot * (scale * x) over that box is the instance's box in the world: one meaning of bounds, all the way through. \`spawnInstances\` emits one instance of the unit \`block\` mesh per bay, coloured by floor (\`tint\` reads the \`level\` index the floor split wrote).\\n\\nPIVOT AT THE END of a grammar. Pieces cut after a pivot sit in different frames, so their shared faces stop being bit-exact and boxContact compares them in the world rather than in one shared frame. And to DRAW the cells as faces rather than instances, no pivot is needed: boxesToMesh builds every face through its cell's P, rot and scale, straight from the grammar.",
+    "tags": [
+      "basics",
+      "structure",
+      "spawn",
+      "instancing"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "lots",
+      "type": "pointList",
+      "params": {
+        "positions": [
+          -16,
+          0,
+          0,
+          0,
+          0,
+          0,
+          16,
+          0,
+          2
+        ],
+        "columnNames": [
+          "rot"
+        ],
+        "columnTypes": [
+          "vec4"
+        ],
+        "columnValues": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0.25881904510252074,
+          0,
+          0.9659258262890683,
+          0,
+          0.7071067811865476,
+          0,
+          0.7071067811865476
+        ]
+      }
+    },
+    {
+      "id": "block",
+      "type": "setBounds",
+      "params": {
+        "boundsMin": [
+          -4,
+          0,
+          -3
+        ],
+        "boundsMax": [
+          4,
+          9,
+          3
+        ]
+      }
+    },
+    {
+      "id": "floors",
+      "type": "splitBox",
+      "params": {
+        "axis": "y",
+        "labels": [
+          "floor"
+        ],
+        "sizes": [
+          3
+        ],
+        "units": [
+          "repeat"
+        ],
+        "indexAttr": "level"
+      }
+    },
+    {
+      "id": "bays",
+      "type": "splitBox",
+      "params": {
+        "axis": "x",
+        "labels": [
+          "bay"
+        ],
+        "sizes": [
+          2
+        ],
+        "units": [
+          "repeat"
+        ],
+        "indexAttr": "bay"
+      }
+    },
+    {
+      "id": "pivot",
+      "type": "pivotBox",
+      "params": {
+        "pivot": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      }
+    },
+    {
+      "id": "fit",
+      "type": "setAttribute",
+      "params": {
+        "name": "scale",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 3,
+        "value": {
+          "fn": "mul",
+          "args": [
+            {
+              "fn": "attribute",
+              "name": "scale",
+              "tupleSize": 3
+            },
+            {
+              "fn": "sub",
+              "args": [
+                {
+                  "fn": "box",
+                  "name": "size"
+                },
+                0.2
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "unit",
+      "type": "setBounds",
+      "params": {
+        "boundsMin": [
+          -0.5,
+          -0.5,
+          -0.5
+        ],
+        "boundsMax": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      }
+    },
+    {
+      "id": "tint",
+      "type": "setAttribute",
+      "params": {
+        "name": "color",
+        "domain": "point",
+        "type": "f32",
+        "tupleSize": 4,
+        "value": {
+          "fn": "vec",
+          "args": [
+            {
+              "fn": "add",
+              "args": [
+                0.5,
+                {
+                  "fn": "mul",
+                  "args": [
+                    0.12,
+                    {
+                      "fn": "attribute",
+                      "name": "level"
+                    }
+                  ]
+                }
+              ]
+            },
+            0.42,
+            {
+              "fn": "sub",
+              "args": [
+                0.5,
+                {
+                  "fn": "mul",
+                  "args": [
+                    0.08,
+                    {
+                      "fn": "attribute",
+                      "name": "level"
+                    }
+                  ]
+                }
+              ]
+            },
+            1
+          ]
+        }
+      }
+    },
+    {
+      "id": "spawn",
+      "type": "spawnInstances",
+      "params": {
+        "assetId": "block",
+        "colorAttr": "color"
+      }
+    },
+    {
+      "id": "blockMesh",
+      "type": "meshPrimitive",
+      "params": {
+        "shape": "box",
+        "size": [
+          1,
+          1,
+          1
+        ]
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from": [
+        "lots",
+        "out"
+      ],
+      "to": [
+        "block",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "block",
+        "out"
+      ],
+      "to": [
+        "floors",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "floors",
+        "out"
+      ],
+      "to": [
+        "bays",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "bays",
+        "out"
+      ],
+      "to": [
+        "pivot",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "pivot",
+        "out"
+      ],
+      "to": [
+        "fit",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "fit",
+        "out"
+      ],
+      "to": [
+        "unit",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "unit",
+        "out"
+      ],
+      "to": [
+        "tint",
+        "in"
+      ]
+    },
+    {
+      "from": [
+        "tint",
+        "out"
+      ],
+      "to": [
+        "spawn",
+        "in"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "id": "spawn",
+      "pin": "instances",
+      "name": "blocks"
+    },
+    {
+      "id": "blockMesh",
+      "pin": "out",
+      "name": "block",
+      "role": "asset"
+    }
+  ]
+}
+`;export{e as default};
