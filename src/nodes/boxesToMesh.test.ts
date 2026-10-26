@@ -425,7 +425,7 @@ describe("boxesToMesh: through the cell's transform", () => {
     expect(tris(moved)).toEqual(tris(plain));
   });
 
-  it("a ROTATED, scaled, mirrored, zero-scaled cell: every vertex where P + R(S x) puts it, every triangle facing out, its normal its winding's, its uv unmirrored", async () => {
+  it("a ROTATED, scaled, mirrored, zero-scaled cell: every vertex where P + R(S x) puts it, every triangle facing out, its normal its winding's, its uv mirrored exactly when the box is", async () => {
     const rng = new Pcg32(0xb0e5, 2);
     const r = () => rng.nextF32();
     const pick = <V,>(a: readonly V[]): V => a[Math.floor(r() * a.length)];
@@ -465,7 +465,8 @@ describe("boxesToMesh: through the cell's transform", () => {
         const want = apply(t, local[i]);
         for (let k = 0; k < 3; k++) worstUlps = Math.max(worstUlps, Math.abs(world[i][k] - want[k]) / ulp(mag));
       }
-      if (t.scale.filter((s) => s < 0).length % 2 === 1) mirrored++;
+      const isMirror = t.scale.filter((s) => s < 0).length % 2 === 1;
+      if (isMirror) mirrored++;
       const centre = apply(t, [0, 1, 2].map((a) => (lo[a] + hi[a]) / 2));
       for (const [a, b, c] of tris(out)) {
         // The normal is unit and flat on the face.
@@ -481,9 +482,10 @@ describe("boxesToMesh: through the cell's transform", () => {
         // ... and that side is OUTSIDE (inside under flip).
         const o = sub3(world[a], centre);
         if (Math.abs(dot(o, n[a])) > 1e-6 * mag) expect(Math.sign(dot(o, n[a]))).toBe(flip ? -1 : 1);
-        // The uv is unmirrored seen from that side: counter-clockwise too.
+        // The uv MIRRORS WITH THE BOX: seen from that side it is
+        // counter-clockwise on an unmirrored box, clockwise on a mirrored one.
         const uvArea = (uv[b][0] - uv[a][0]) * (uv[c][1] - uv[a][1]) - (uv[b][1] - uv[a][1]) * (uv[c][0] - uv[a][0]);
-        expect(uvArea).toBeGreaterThan(0);
+        expect(Math.sign(uvArea)).toBe(isMirror ? -1 : 1);
       }
     }
     expect(mirrored).toBeGreaterThan(10);
@@ -491,6 +493,60 @@ describe("boxesToMesh: through the cell's transform", () => {
     // Measured: 4444 triangles over 120 cells, 36 of them mirrored, every
     // vertex within 0.55 f32 ulps of the cell's magnitude.
     expect(worstUlps).toBeLessThanOrEqual(1);
+  });
+
+  it("a mirrored box is the MIRROR IMAGE of the unmirrored one, uv included: at every world vertex its uv is the unmirrored box's at the mirrored point", async () => {
+    // The unmirrored cell has scale S0, the other S0 * m for a sign pattern
+    // m. Its world vertex P + R(S0 m x) is the image of P + R(S0 x) under
+    // the world map W -> P + M (W - P), M = R diag(m) R^T: the mirror in the
+    // cell's own frame (for an even pattern, a half turn). Everything is
+    // dyadic and R a signed permutation, so the image is exact and the
+    // points are matched by position and normal (a corner sits on three
+    // faces, each with its own point).
+    const box: Box = [[-1, 0, 0.5], [2, 3, 1.25]];
+    const P = [2.5, -1, 4];
+    const S0 = [2, 0.5, 1.5];
+    const key = (p: number[], n: number[]) => `${p.map((x) => x + 0).join()}|${n.map((x) => x + 0).join()}`;
+    let matched = 0;
+    let discriminating = 0;
+    for (const rot of [[0, 0, 0, 1], [0, H, 0, H]]) {
+      const R = matrix(rot).map((row) => row.map(Math.round));
+      for (let bits = 0; bits < 8; bits++) {
+        const m = [0, 1, 2].map((a) => ((bits >> a) & 1 ? -1 : 1));
+        const isMirror = m[0] * m[1] * m[2] < 0;
+        // M = R diag(m) R^T.
+        const M = [0, 1, 2].map((r) => [0, 1, 2].map((c) => R[r][0] * m[0] * R[c][0] + R[r][1] * m[1] * R[c][1] + R[r][2] * m[2] * R[c][2]));
+        const image = (v: number[], origin: number[]) =>
+          [0, 1, 2].map((r) => origin[r] + M[r][0] * (v[0] - origin[0]) + M[r][1] * (v[1] - origin[1]) + M[r][2] * (v[2] - origin[2]));
+        for (const flip of [false, true]) {
+          const params = { normals: true, subdivisions: [2, 4, 2], flip };
+          const plain = await mesh(stamp(cells([box]), [{ P, rot, scale: S0 }]), params);
+          const other = await mesh(stamp(cells([box]), [{ P, rot, scale: S0.map((s, a) => s * m[a]) }]), params);
+          const Pm = tuples(other, "P", 3);
+          const Nm = tuples(other, "normal", 3);
+          const UVm = tuples(other, "uv", 2);
+          const at = new Map<string, number[]>();
+          Pm.forEach((p, i) => at.set(key(p, Nm[i]), UVm[i]));
+          expect(at.size).toBe(Pm.length);
+          const P0 = tuples(plain, "P", 3);
+          const N0 = tuples(plain, "normal", 3);
+          const UV0 = tuples(plain, "uv", 2);
+          P0.forEach((p, i) => {
+            const want = at.get(key(image(p, P), image(N0[i], [0, 0, 0])));
+            expect(want).toBeDefined();
+            expect(want).toEqual(UV0[i]);
+            matched++;
+            // A point the old reading (u mirrored back, 1 - u) would miss.
+            if (isMirror && UV0[i][0] !== 1 - UV0[i][0]) discriminating++;
+          });
+          // The mirrored triangles still face the way their normal says.
+          const g = faceNormals(other);
+          tris(other).forEach(([a], t) => expect(dot(g[t], Nm[a])).toBeGreaterThan(0));
+        }
+      }
+    }
+    expect(matched).toBe(2 * 8 * 2 * 2 * (3 * 3 + 3 * 5 + 5 * 3));
+    expect(discriminating).toBeGreaterThan(100);
   });
 
   it("a quarter turn stored in f32 moves every vertex EXACTLY, and its normals are exact axes", async () => {
