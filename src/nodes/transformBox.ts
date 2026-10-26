@@ -171,7 +171,7 @@ export const transformBox = standardNode<TransformBoxParams, TransformBoxInputs,
       default: [0, 0, 0],
       acceptsField: true,
       description:
-        "How far every box moves AFTER the scale, per box axis, in the output's units: [0, 0, 0] (the default) leaves it on the pivot's frame. A field reading a per-cell attribute moves each cell by its own amount — mul(attribute(\"lot\", 3), [-0.5, 0, -0.5]) centres a lot whose box starts at the origin on x and z. As a FIELD it is resolved per cell on the input; a scalar broadcasts. Must be finite.",
+        "How far every box moves AFTER the scale, per box axis, in the output's units: [0, 0, 0] (the default) leaves it on the pivot's frame. A field reading a per-cell attribute moves each cell by its own amount — mul(attribute(\"lot\", 3), [-0.5, 0, -0.5]) centres a lot whose box starts at [0, 0, 0] in its own coordinates (on its cell's P, not at the world's origin) on x and z. As a FIELD it is resolved per cell on the input; a scalar broadcasts. Must be finite.",
     },
     where: {
       type: "f32",

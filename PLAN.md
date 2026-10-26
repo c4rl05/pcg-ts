@@ -78,11 +78,22 @@ graph that needs bricks off the world axes.
 Corners in different frames have no common bounding box, so the chosen
 cells must share one transform (bit-identical P, rot and scale, as every
 piece of one grammar root does) and a mix is refused naming two cells
-that differ. Lifting that needs a common frame: either one named by the
-caller (a reference point) or the world, with the union taken over each
-box's world corners and mapped back into every cell's frame — exact only
-under quarter turns and dyadic scales. Waiting for a caller that unions
-pieces of different roots.
+that differ. Lifting that needs a common frame: one named by the caller
+(a reference point), every corner mapped straight into it and bounded
+there, or the world. The world route was measured on 2026-10-26 (a
+throwaway script, 20000 trials a case: the world box of every corner
+mapped back into a cell's frame and bounded, the pivot fraction read
+along that frame's axes) and fails off quarter turns by geometry, not
+rounding: the bound of a turned box is larger than the box. Even on ONE
+shared frame, where today's local union is the exact answer, the
+mapped-back box is on its worst axis 2.1 times too wide on average (7.2
+at worst) under a uniform scale and 3.5 times (23 at worst) under a
+per-axis one, and no pivot of [0, 0, 0], [0.5, 0.5, 0.5], [1, 1, 1] or
+[0.5, 0, 0.5] came out bit-exact. Under quarter turns all 20000 were
+bit-exact with f32 P, scale and corners, so dyadic values were not
+needed there. Across three frames it is 2.8 times the tight box per
+frame on average (13 at worst). So only the caller-named frame is a
+remedy. Waiting for a caller that unions pieces of different roots.
 
 ### `smoothNormals`' two f32 params refuse a field — found 2026-09-27
 

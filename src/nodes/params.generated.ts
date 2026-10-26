@@ -723,8 +723,9 @@ export interface BoxesToMeshParams {
   /**
    * Reverse every triangle's winding (and the written `normal` with it), so every box faces
    * INWARD — a room seen from inside it. meshPrimitive's `flip`. The uv's u is mirrored with
-   * it (1 - u), so seen from INSIDE every face still reads left to right and bottom to top;
-   * v is unchanged.
+   * it (1 - u), so seen from INSIDE every face of an unmirrored box still reads left to
+   * right and bottom to top (a mirrored room is its mirror image, as without `flip`); v is
+   * unchanged.
    *
    * @defaultValue `false`
    */
@@ -7693,8 +7694,9 @@ export interface TransformBoxParams {
    * How far every box moves AFTER the scale, per box axis, in the output's units: [0, 0, 0]
    * (the default) leaves it on the pivot's frame. A field reading a per-cell attribute moves
    * each cell by its own amount — mul(attribute("lot", 3), [-0.5, 0, -0.5]) centres a lot
-   * whose box starts at the origin on x and z. As a FIELD it is resolved per cell on the
-   * input; a scalar broadcasts. Must be finite.
+   * whose box starts at [0, 0, 0] in its own coordinates (on its cell's P, not at the
+   * world's origin) on x and z. As a FIELD it is resolved per cell on the input; a scalar
+   * broadcasts. Must be finite.
    *
    * - Accepts a field.
    *
