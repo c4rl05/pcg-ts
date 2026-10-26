@@ -4,7 +4,7 @@ Generated from the graphs in [`graphs`](../graphs) by `node scripts/gen-graphs.m
 
 Each file teaches ONE thing and cooks from JSON alone — no runtime-injected data, so `pcg cook <file>` on a clean install reproduces exactly what the corpus test asserts.
 
-108 examples, alphabetical by file:
+109 examples, alphabetical by file:
 
 - [basics-a-draw-that-survives-a-move.json](#basics-a-draw-that-survives-a-movejson) — Keep a random draw when the point moves
 - [basics-a-table-of-points.json](#basics-a-table-of-pointsjson) — Write a table of points into the graph
@@ -12,6 +12,7 @@ Each file teaches ONE thing and cooks from JSON alone — no runtime-injected da
 - [basics-attribute-from-noise.json](#basics-attribute-from-noisejson) — Write an attribute from a noise field
 - [basics-attribute-remap.json](#basics-attribute-remapjson) — Rescale an attribute to a new range
 - [basics-bridge-two-paths.json](#basics-bridge-two-pathsjson) — Span the band between two paths
+- [basics-cells-to-instances.json](#basics-cells-to-instancesjson) — Hand a grammar's cells to instances
 - [basics-clip-a-path.json](#basics-clip-a-pathjson) — Cut a path where a field goes negative
 - [basics-colonnade.json](#basics-colonnadejson) — A colonnade spaced along the arc, not along the parameter
 - [basics-compose-primitives.json](#basics-compose-primitivesjson) — Compose several primitives into a scatter
@@ -230,6 +231,30 @@ Cook it: `pcg cook graphs/basics-attribute-remap.json --stats`
 **Outputs:** `road` (from `road`.`out`), `centreline` (from `even`.`out`)
 
 Cook it: `pcg cook graphs/basics-bridge-two-paths.json --stats`
+
+## basics-cells-to-instances.json
+
+**Hand a grammar's cells to instances**
+
+A grammar CUTS boxes; a renderer often wants INSTANCES, one copy of an asset per piece, and the two disagree about where a piece is. A cell's box is an extent in its point's OWN frame (world = P + rot * (scale * x)), and every piece splitBox cuts keeps its root's P, rot and scale bit for bit, which is what lets neighbouring pieces meet exactly. An instance is placed AT its point. `pivotBox` is the hand-off: it moves each piece's P to a point of its box (`pivot`, a fraction per box axis; [0.5, 0.5, 0.5] is the centre) and re-expresses the box about it, so the box does not move in the world.
+
+Three lots stand in a row, turned 0, 30 and 90 degrees about y by their `rot` column. `block` gives each the same box as LOCAL corners about its point, setBounds [-4, 0, -3] to [4, 9, 3]: 8 wide, 9 tall, 6 deep, standing on the lot. `floors` cuts it into three floors of 3 and `bays` each floor into four bays of 2. Nothing in the grammar reads rot: the cuts are made in the block's own frame, so the bays turn with it.
+
+After `pivot`, `fit` sets each piece's scale to its box size less 0.2, mul(attribute("scale", 3), sub(box("size"), 0.2)) (times the scale it inherited, 1 here), which opens a gap of 0.2 between neighbours about each bay's own centre. `unit` then gives every piece the unit box [-0.5, 0.5], the extent the asset fills, so P + rot * (scale * x) over that box is the instance's box in the world: one meaning of bounds, all the way through. `spawnInstances` emits one instance of the unit `block` mesh per bay, coloured by floor (`tint` reads the `level` index the floor split wrote).
+
+PIVOT AT THE END of a grammar. Pieces cut after a pivot sit in different frames, so their shared faces stop being bit-exact and boxContact compares them in the world rather than in one shared frame.
+
+**Tags:** `basics`, `structure`, `spawn`, `instancing`
+
+**Seed:** 1207
+
+**Node types:** `meshPrimitive`, `pivotBox`, `pointList`, `setAttribute`, `setBounds`, `spawnInstances`, `splitBox`
+
+**Primitives:** *(none)*
+
+**Outputs:** `blocks` (from `spawn`.`instances`), `block` (from `blockMesh`.`out`)
+
+Cook it: `pcg cook graphs/basics-cells-to-instances.json --stats`
 
 ## basics-clip-a-path.json
 

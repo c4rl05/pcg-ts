@@ -499,8 +499,8 @@ describe("describeGraphAssets: the graph corpus", () => {
   );
 
   it("finds every spawner in the corpus, bodies included", () => {
-    expect(new Set(spawners.map((s) => s.file)).size).toBe(30);
-    expect(spawners).toHaveLength(48);
+    expect(new Set(spawners.map((s) => s.file)).size).toBe(31);
+    expect(spawners).toHaveLength(49);
     // Eight of them are inside a `write/instances-by-species` body.
     expect(spawners.filter((s) => s.node.includes(" > "))).toHaveLength(8);
   });
@@ -522,6 +522,9 @@ describe("describeGraphAssets: the graph corpus", () => {
         "bar",
         "barn",
         "birch",
+        // One bay of `basics-cells-to-instances`, a grammar's pieces handed
+        // to instances through pivotBox; the graph supplies the mesh itself.
+        "block",
         // A crossing marker in `basics-where-bars-cross`.
         "boss",
         "boulder",

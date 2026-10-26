@@ -1165,7 +1165,7 @@ what the rules add.
 has its own chapter above.
 
 A recipe that is only one cook of one graph is not a demo here; it is
-one of the 108 files in `graphs/`, cooked by `pcg cook`, rendered by
+one of the 109 files in `graphs/`, cooked by `pcg cook`, rendered by
 `npm run preview`, editable in the editor, and pictured in [the
 gallery](https://c4rl05.github.io/pcg-ts/gallery.html). All of it runs
 locally from one vite server:

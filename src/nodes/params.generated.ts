@@ -4036,6 +4036,47 @@ export type PathShiftInputs = "in";
 export type PathShiftOutputs = "out";
 
 /**
+ * Params of the `pivotBox` node type.
+ */
+export interface PivotBoxParams {
+  /**
+   * Where in its box each cell's P moves, as a FRACTION of the box per box axis — placeBox's
+   * anchor reading: 0 the min face, 0.5 the centre, 1 the max face, values outside 0..1 past
+   * the face. [0.5, 0.5, 0.5] (the default) puts P at the box's centre, [0.5, 0, 0.5] at the
+   * middle of its floor (where a building stands), [0, 0, 0] at its min corner. The box is
+   * re-expressed about the new P, so it does not move. As a FIELD it is resolved per cell on
+   * the INPUT (box names read the box as it arrived) and a scalar broadcasts to all three.
+   * Held as f32; must be finite.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `[0.5,0.5,0.5]`
+   */
+  pivot: FieldParam;
+  /**
+   * Which cells are pivoted: nonzero pivots the cell, 0 leaves it EXACTLY as it arrived — P
+   * and box untouched, and its box not checked (a FIELD param is still resolved, and refused
+   * if not finite, on every cell). As a field it is resolved per cell, e.g.
+   * attributeIs("kind", "window"). Must be finite.
+   *
+   * - Accepts a field.
+   *
+   * @defaultValue `1`
+   */
+  where: FieldParam;
+}
+
+/**
+ * The input pin names of the `pivotBox` node type.
+ */
+export type PivotBoxInputs = "in";
+
+/**
+ * The output pin names of the `pivotBox` node type.
+ */
+export type PivotBoxOutputs = "out";
+
+/**
  * Params of the `placeBox` node type.
  */
 export interface PlaceBoxParams {

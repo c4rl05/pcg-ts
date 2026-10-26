@@ -6611,6 +6611,67 @@
           "if": {
             "properties": {
               "type": {
+                "const": "pivotBox"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "description": "MOVES every cell's P TO A POINT OF ITS BOX and re-expresses the box about it, so THE BOX STAYS WHERE IT IS IN THE WORLD: the hand-off from a grammar's cells to instances. A CELL IS A POINT WITH A BOX, as in splitBox: its standard `boundsMin`/`boundsMax`, an extent in the point's OWN frame (world = P + rot * (scale * x)), and every piece of one grammar root keeps that root's P, rot and scale, which is what lets neighbouring pieces meet exactly. copyToPoints and spawnInstances place a copy AT P, so a piece's P must first move to the piece: this node does that. THE MAP, per cell, with f the `pivot` fraction on each box axis: c = (1 - f) * min + f * max, held as an f32 (0 the min face, 0.5 the centre, 1 the max face, outside 0..1 past the face — placeBox's anchor reading); P becomes P + rot * (scale * c), the world position of that point; boundsMin and boundsMax become min - c and max - c. rot and scale are KEPT, so P + rot * (scale * x) gives every corner the world position it had: a rotated or mirrored cell keeps its oriented box. With the default [0.5, 0.5, 0.5] P lands at the box's centre and the box runs -size/2..size/2 about it; [0.5, 0, 0.5] puts P at the middle of the box's floor. THE CELL-TO-INSTANCE TAIL: pivotBox, then setAttribute scale = mul(attribute(\"scale\", 3), box(\"size\")) and setBounds boundsMin [-0.5, -0.5, -0.5], boundsMax [0.5, 0.5, 0.5] (the unit box the asset fills, about P), then copyToPoints or spawnInstances — or boxesToMesh straight from the cells, which needs no pivot, since it builds every face through the cell's transform. PIVOT AT THE END OF A GRAMMAR: pieces split after a pivot are pieces of DIFFERENT frames, so they lose boxContact's same-frame comparison and their shared faces stop being bit-exact. Rounding: the rotation is normalized in f64 first (as boxContact and boxesToMesh read it; a zero quaternion is the identity) and its matrix entries within 2^-40 of 0 or 1 are snapped to them, so a quarter or half turn stored in f32 moves a point exactly; P and the corners are computed in f64 and stored as f32, each -0 written +0. Because c is held as an f32, min - c and max - c are exact whenever c is within a factor of two of the corner, and the world box then moves only by the rounding of the new P — exact for dyadic boxes at dyadic P under no turn, quarter or half turns and dyadic scales. `pivot` is a vec3, plain or a FIELD resolved per cell on the INPUT (box names read the box as it arrived; a scalar broadcasts), held as f32. `where` passes chosen cells through EXACTLY as they arrived (0 = untouched). An input box that is inside out or not finite, a non-finite P, rot or scale, and a result past f32's range are refused naming the cell. Same points, same order, same SEEDS, every attribute (strings included), the topology and the detail attributes carried; only P, boundsMin and boundsMax are written. Point identity hashes P, so a randomField drawn after this node differs from one drawn before it. CPU only, as every box node.",
+            "properties": {
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "pivot": {
+                    "anyOf": [
+                      {
+                        "items": {
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      {
+                        "$ref": "#/$defs/fieldSpec"
+                      }
+                    ],
+                    "default": [
+                      0.5,
+                      0.5,
+                      0.5
+                    ],
+                    "description": "Where in its box each cell's P moves, as a FRACTION of the box per box axis — placeBox's anchor reading: 0 the min face, 0.5 the centre, 1 the max face, values outside 0..1 past the face. [0.5, 0.5, 0.5] (the default) puts P at the box's centre, [0.5, 0, 0.5] at the middle of its floor (where a building stands), [0, 0, 0] at its min corner. The box is re-expressed about the new P, so it does not move. As a FIELD it is resolved per cell on the INPUT (box names read the box as it arrived) and a scalar broadcasts to all three. Held as f32; must be finite."
+                  },
+                  "where": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "$ref": "#/$defs/fieldSpec"
+                      }
+                    ],
+                    "default": 1,
+                    "description": "Which cells are pivoted: nonzero pivots the cell, 0 leaves it EXACTLY as it arrived — P and box untouched, and its box not checked (a FIELD param is still resolved, and refused if not finite, on every cell). As a field it is resolved per cell, e.g. attributeIs(\"kind\", \"window\"). Must be finite."
+                  }
+                },
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "ref": false,
+              "subgraph": false
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
                 "const": "placeBox"
               }
             },
@@ -13176,6 +13237,7 @@
             "pathScan",
             "pathSegments",
             "pathShift",
+            "pivotBox",
             "placeBox",
             "pointGrid",
             "pointLine",

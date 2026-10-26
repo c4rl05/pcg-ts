@@ -95,6 +95,7 @@ export * from "./boxContact.js";
 export * from "./placeBox.js";
 export * from "./offsetBox.js";
 export * from "./transformBox.js";
+export * from "./pivotBox.js";
 export * from "./boxesToMesh.js";
 export * from "./filtering.js";
 export * from "./visibility.js";

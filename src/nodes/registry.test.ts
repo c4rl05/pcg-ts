@@ -471,6 +471,7 @@ describe("category metadata", () => {
       placeBox: "point op",
       offsetBox: "point op",
       transformBox: "point op",
+      pivotBox: "point op",
       mergePoints: "point op",
       mergePrimitives: "point op",
       orientAlongVector: "point op",

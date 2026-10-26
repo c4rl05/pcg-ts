@@ -567,6 +567,120 @@
         ]
       }
     },
+    "basics-cells-to-instances.json": {
+      "outputs": {
+        "block": [
+          {
+            "kind": "geometry",
+            "tags": [],
+            "counts": {
+              "point": 24,
+              "vertex": 36,
+              "primitive": 12,
+              "detail": 1
+            },
+            "attrs": {
+              "point": [
+                "P:f32x3",
+                "uv:f32x2"
+              ],
+              "primitive": [
+                "primtype:string"
+              ]
+            },
+            "bounds": {
+              "min": [
+                -0.5,
+                -0.5,
+                -0.5
+              ],
+              "max": [
+                0.5,
+                0.5,
+                0.5
+              ]
+            }
+          }
+        ],
+        "blocks": [
+          {
+            "kind": "instances",
+            "tags": [],
+            "residency": "cpu",
+            "instances": 36,
+            "batches": [
+              {
+                "assetId": "block",
+                "count": 36,
+                "channels": [
+                  {
+                    "name": "color",
+                    "type": "f32",
+                    "itemSize": 3,
+                    "values": {
+                      "min": [
+                        0.5,
+                        0.42,
+                        0.34
+                      ],
+                      "max": [
+                        0.74,
+                        0.42,
+                        0.5
+                      ],
+                      "mean": [
+                        0.62,
+                        0.42,
+                        0.42
+                      ]
+                    }
+                  }
+                ],
+                "translation": {
+                  "min": [
+                    -19,
+                    1.5,
+                    -1.5
+                  ],
+                  "max": [
+                    16,
+                    7.5,
+                    5
+                  ],
+                  "mean": [
+                    0,
+                    4.5,
+                    0.6667
+                  ]
+                },
+                "scale": {
+                  "min": [
+                    1.8,
+                    2.8,
+                    5.8
+                  ],
+                  "max": [
+                    1.8,
+                    2.8,
+                    5.8
+                  ],
+                  "mean": [
+                    1.8,
+                    2.8,
+                    5.8
+                  ]
+                },
+                "rotation": {
+                  "min": 0,
+                  "max": 1.5708,
+                  "mean": 0.6981
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
     "basics-clip-a-path.json": {
       "outputs": {
         "kept": [
