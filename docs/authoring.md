@@ -808,6 +808,22 @@ componentwise, in the point's own frame: it stretches the cell along its
 own axes, the way `copyToPoints` composes a copy, and is not the affine
 image of the world box (which a box could not represent).
 
+Two idioms from the time a box was a WORLD box are refused rather than
+cooked at twice P, both read from the field expression itself (an exact
+affine reading in P and the box, never a string match).
+`box-corner-counts-position` catches a box whose two corners are both
+`position()` plus an offset on the same axis (`P - s/2` and `P + s/2`):
+it keeps its size and moves with P, so the point's transform adds P
+again. It is refused in `setBounds` "corners" at validate and at cook,
+and at validate only when two `setAttribute` nodes write `boundsMin` and
+`boundsMax` along one chain with nothing between them that rewrites P or
+the box (a cook sees one node at a time). One corner tracking P is not
+that box: `min.y = -P.y` with `max.y = P.y` is centred on P and reaches
+world y = 0. `position-from-local-box` catches a P set from a box
+position with no `position()` term (`P = box("center")`, or a
+`transformPoints` translate of `box("center") - position()`), the old
+cell-to-instance hand-off; `pivotBox` is the fix it names.
+
 Two consumers matter at the end of a grammar. `boxesToMesh` builds every
 face through the cell's P, rot and scale, so it needs nothing before it.
 An instance placed by `copyToPoints` or `spawnInstances` lands AT P, so a

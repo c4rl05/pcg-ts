@@ -382,3 +382,215 @@ describe("boundsFrameFaults reads the expression, not its spelling", () => {
     expect(boundsFrameFaults("setAttribute", { name: "P", domain: "point", type: "f32", value }).length).toBe(1);
   });
 });
+
+/**
+ * The corner pair split across two setAttribute writes. A cook runs one
+ * node at a time and never sees the other corner, so this refusal is
+ * VALIDATE-ONLY: `checkSerializedGraph` reports it, and the cook still runs.
+ */
+describe("validate pairs two setAttribute corner writes on one chain", () => {
+  const corner = (id: string, name: "boundsMin" | "boundsMax", value: unknown): Node => ({
+    id,
+    type: "setAttribute",
+    params: { name, tupleSize: 3, value },
+  });
+  const pairRecords = (doc: Record<string, unknown>) =>
+    checkSerializedGraph(doc).errors.filter((r) => r.code === "box-corner-counts-position");
+  /** Validates with no error and no warning at all, and cooks. */
+  async function clean(doc: Record<string, unknown>): Promise<Geometry> {
+    const report = checkSerializedGraph(doc);
+    expect(report.errors).toEqual([]);
+    expect(report.warnings).toEqual([]);
+    return geoOf((await cook(deserializeGraph(doc))).outputs.out);
+  }
+  /** A document with explicit wiring: `edges` as [from, to] on out -> in. */
+  function wired(nodes: Node[], edges: [string, string][], outputs: string[]): Record<string, unknown> {
+    return {
+      formatVersion: 1,
+      seed: 7,
+      nodes,
+      connections: edges.map(([from, to]) => ({ from: [from, "out"], to: [to, "in"] })),
+      outputs: outputs.map((id, i) => ({ id, pin: "out", name: i === 0 ? "out" : `out${i}` })),
+    };
+  }
+  const PTS: Node = { id: "pts", type: "pointList", params: { positions: POINTS } };
+  const CELLS: Node = { id: "cells", type: "setBounds", params: { anchor: "center", size: [2, 4, 2] } };
+  const LO = fn("sub", POS, [4, 0, 3]);
+  const HI = fn("add", POS, [4, 9, 3]);
+
+  it("min = P - s and max = P + s in two nodes is the refused box: both nodes named, same code, validate only", async () => {
+    const doc = graphOf(corner("lo", "boundsMin", LO), corner("hi", "boundsMax", HI));
+    const records = pairRecords(doc);
+    expect(records.map((r) => [r.nodeId, r.param, r.path])).toEqual([
+      ["lo", "value", "/nodes/2/params/value"],
+      ["hi", "value", "/nodes/3/params/value"],
+    ]);
+    const [lo, hi] = records;
+    expect(lo).toMatchObject({ severity: "error", nodePath: ["lo"] });
+    expect(lo!.message).toContain('node "lo" (setAttribute): param "value" writes "boundsMin"');
+    expect(lo!.message).toContain('node "hi" (setAttribute), downstream of it on the same chain');
+    expect(hi!.message).toContain('node "hi" (setAttribute): param "value" writes "boundsMax"');
+    expect(hi!.message).toContain('node "lo" (setAttribute), upstream of it on the same chain');
+    for (const r of records) {
+      expect(r.message).toContain("on axes x, y and z");
+      expect(r.message).toContain("counts P twice");
+      expect(r.message).toContain("Drop position() from both corners");
+      expect(r.message).toContain(
+        'one setBounds that sizes the box about the point with "anchor" "center", "baseCenter" or "min"',
+      );
+    }
+    // CONTROL: the cook cannot see the pair, so it runs; the box lands at twice P.
+    const geo = geoOf((await cook(deserializeGraph(doc))).outputs.out);
+    expect(column(geo, "boundsMin").slice(0, 3)).toEqual([-20, 0, -3]);
+  });
+
+  it("the pair is found across nodes that keep P and the box, in either order (the lattice brick, the estate lot)", () => {
+    const brick = graphOf(
+      corner("hi", "boundsMax", fn("mul", fn("add", POS, [1, 1, 1]), [1, 0.4, 1])),
+      { id: "tag", type: "setAttribute", params: { name: "isHouse", value: 1 } },
+      { id: "keep", type: "filterByExpression", params: { predicate: fn("gt", comp(POS, 0), -100) } },
+      { id: "drop", type: "removeAttribute", params: { names: ["isHouse"] } },
+      corner("lo", "boundsMin", fn("mul", POS, [1, 0.4, 1])),
+    );
+    const records = pairRecords(brick);
+    expect(records.map((r) => r.nodeId)).toEqual(["hi", "lo"]);
+    expect(records[0]!.message).toContain("on axes x and z,");
+    const half = (name: string) => fn("div", { fn: "attribute", name }, 2);
+    const estate = graphOf(
+      { id: "setW", type: "setAttribute", params: { name: "w", value: 8 } },
+      { id: "setD", type: "setAttribute", params: { name: "d", value: 6 } },
+      corner("lo", "boundsMin", fn("vec", fn("sub", comp(POS, 0), half("w")), 0, fn("sub", comp(POS, 2), half("d")))),
+      corner("hi", "boundsMax", fn("vec", fn("add", comp(POS, 0), half("w")), 1, fn("add", comp(POS, 2), half("d")))),
+    );
+    const estateRecords = pairRecords(estate);
+    expect(estateRecords.map((r) => r.nodeId)).toEqual(["lo", "hi"]);
+    expect(estateRecords[0]!.message).toContain("on axes x and z,");
+  });
+
+  it("ONE corner tracking P is still a legitimate box: min.y = -P.y, max.y = +P.y reaches world y = 0", async () => {
+    const geo = await clean(
+      graphOf(
+        corner("lo", "boundsMin", fn("vec", -0.5, fn("mul", -1, comp(POS, 1)), -0.5)),
+        corner("hi", "boundsMax", fn("vec", 0.5, comp(POS, 1), 0.5)),
+      ),
+    );
+    expect(column(geo, "boundsMin").slice(3, 6)).toEqual([-0.5, -3, -0.5]);
+    expect(column(geo, "boundsMax").slice(3, 6)).toEqual([0.5, 3, 0.5]);
+  });
+
+  it("corners whose P terms do not match are not the refused box", async () => {
+    // P on different axes.
+    await clean(
+      graphOf(
+        corner("lo", "boundsMin", fn("vec", comp(POS, 0), 0, 0)),
+        corner("hi", "boundsMax", fn("vec", 1, 1, fn("add", comp(POS, 2), 1))),
+      ),
+    );
+    // A coefficient other than 1 on one corner: a size that grows with P.
+    await clean(graphOf(corner("lo", "boundsMin", fn("mul", POS, 0.4)), corner("hi", "boundsMax", fn("add", POS, [1, 1, 1]))));
+    // A corner P does not reach through an affine path is not judged.
+    await clean(graphOf(corner("lo", "boundsMin", fn("floor", POS)), corner("hi", "boundsMax", fn("add", POS, [1, 1, 1]))));
+  });
+
+  it("a later corner that reads the box the earlier one wrote is not paired: its P term is not its own", async () => {
+    // max = P + size, but size there is max_in - (P - 1), so max is the constant max_in + 1.
+    const geo = await clean(
+      graphOf(corner("lo", "boundsMin", fn("sub", POS, 1)), corner("hi", "boundsMax", fn("add", POS, box("size")))),
+    );
+    expect(column(geo, "boundsMax")).toEqual([2, 3, 2, 2, 3, 2, 2, 3, 2]);
+  });
+
+  const between: [string, Node][] = [
+    ["a write of P", { id: "mid", type: "setAttribute", params: { name: "P", tupleSize: 3, value: fn("add", POS, [0, 1, 0]) } }],
+    ["setBounds", { id: "mid", type: "setBounds", params: { anchor: "center", size: [1, 1, 1] } }],
+    [
+      "a write of boundsMin on another domain",
+      { id: "mid", type: "setAttribute", params: { name: "boundsMin", domain: "detail", tupleSize: 3, value: fn("vec", 0, 0, 0) } },
+    ],
+    ["removeAttribute of a corner", { id: "mid", type: "removeAttribute", params: { names: ["boundsMin"] } }],
+    ["transformPoints", { id: "mid", type: "transformPoints", params: { translate: [0, 1, 0] } }],
+    ["pivotBox", { id: "mid", type: "pivotBox", params: {} }],
+  ];
+  it.each(between)("the walk stops at %s between the two writes", (_, mid) => {
+    const doc = graphOf(corner("lo", "boundsMin", LO), mid, corner("hi", "boundsMax", HI));
+    expect(checkSerializedGraph(doc).graph).toBeDefined();
+    expect(pairRecords(doc)).toEqual([]);
+  });
+
+  it("a second write of the same corner ends the walk: only the nearest pair, mid with hi, is judged", () => {
+    const doc = graphOf(
+      corner("lo", "boundsMin", LO),
+      corner("mid", "boundsMin", fn("sub", POS, [2, 2, 2])),
+      corner("hi", "boundsMax", HI),
+    );
+    expect(pairRecords(doc).map((r) => r.nodeId)).toEqual(["mid", "hi"]);
+  });
+
+  it("a merge makes the pairing ambiguous: no refusal", async () => {
+    const doc = wired(
+      [PTS, CELLS, corner("lo", "boundsMin", LO), { id: "join", type: "mergePoints", params: {} }, corner("hi", "boundsMax", HI)],
+      [
+        ["pts", "cells"],
+        ["cells", "lo"],
+        ["lo", "join"],
+        ["cells", "join"],
+        ["join", "hi"],
+      ],
+      ["hi"],
+    );
+    expect(pairRecords(doc)).toEqual([]);
+    await clean(doc);
+  });
+
+  it("a fan-out after the first corner leaves the chain to the second unambiguous, and it is refused", () => {
+    const doc = wired(
+      [
+        PTS,
+        CELLS,
+        corner("lo", "boundsMin", LO),
+        corner("hi", "boundsMax", HI),
+        { id: "other", type: "setAttribute", params: { name: "k", value: 1 } },
+      ],
+      [
+        ["pts", "cells"],
+        ["cells", "lo"],
+        ["lo", "hi"],
+        ["lo", "other"],
+      ],
+      ["hi", "other"],
+    );
+    const records = pairRecords(doc);
+    expect(records.map((r) => r.nodeId)).toEqual(["lo", "hi"]);
+    // Editing the shared node would change the other branch, so the fix is this chain's alone.
+    for (const r of records) {
+      expect(r.message).toContain('node "lo" also feeds another branch');
+      expect(r.message).toContain('replace node "hi" with one setBounds');
+      expect(r.message).not.toContain("Drop position() from both corners");
+    }
+  });
+
+  it("a node between them that copies the box into a scalar stops the walk: the copy IS the earlier corner", async () => {
+    // hy = box("y1") = P.y, so lo.y = P.y - 2 hy = -P.y: the legitimate box centred on P reaching y = 0.
+    const copy = { id: "copy", type: "setAttribute", params: { name: "hy", value: box("y1") } };
+    const lo = corner("lo", "boundsMin", fn("vec", -0.5, fn("sub", comp(POS, 1), fn("mul", 2, { fn: "attribute", name: "hy", tupleSize: 1 })), -0.5));
+    const geo = await clean(graphOf(corner("hi", "boundsMax", fn("vec", 0.5, comp(POS, 1), 0.5)), copy, lo));
+    expect(column(geo, "boundsMin").slice(3, 6)).toEqual([-0.5, -3, -0.5]);
+    // CONTROL: the same copy of a value that is not the box is crossed, and the pair is refused.
+    const plain = { id: "copy", type: "setAttribute", params: { name: "hy", value: 0 } };
+    const shifted = corner("lo", "boundsMin", fn("vec", -0.5, fn("sub", comp(POS, 1), { fn: "attribute", name: "hy", tupleSize: 1 }), -0.5));
+    expect(pairRecords(graphOf(corner("hi", "boundsMax", fn("vec", 0.5, comp(POS, 1), 0.5)), plain, shifted)).map((r) => r.nodeId)).toEqual(["hi", "lo"]);
+  });
+
+  it("an unreachable pair is the unreachable warning's finding, not a refusal", () => {
+    const doc = wired(
+      [PTS, CELLS, corner("lo", "boundsMin", LO), corner("hi", "boundsMax", HI)],
+      [
+        ["pts", "cells"],
+        ["cells", "lo"],
+        ["lo", "hi"],
+      ],
+      ["cells"],
+    );
+    expect(pairRecords(doc)).toEqual([]);
+  });
+});

@@ -52,9 +52,12 @@
  *   with P — the old world box at P — so it lands at twice P. ONE corner
  *   tracking P is not refused: min.y = -P.y with max.y = P.y is a box
  *   centred on P that reaches down to world y = 0, right for every P. That
- *   is also why setAttribute "boundsMin"/"boundsMax" is not judged: one
- *   corner alone cannot say which of the two it is. -1 and 0.5 are not
- *   refused either (reaching a plane; a size that grows with height);
+ *   is also why a setAttribute "boundsMin"/"boundsMax" is not judged ON
+ *   ITS OWN: one corner alone cannot say which of the two it is. The
+ *   validate-time pairing ({@link pairedCornerFaults}) finds the write of
+ *   the other corner along the same chain and applies this same rule to
+ *   the two together. -1 and 0.5 are not refused either (reaching a
+ *   plane; a size that grows with height);
  * - a new P_i with no P term at all (coefficient 0 on every P component)
  *   that still carries O is a box position used as a world position. A
  *   SIZE written into P (`index() * box("sx")`) carries no O and is not
@@ -73,6 +76,10 @@
  * `eligible` gate, so a fused device run cannot skip the refusal), and
  * `diagnoseGraph`, so `pcg validate` reports it before a cook does. All of
  * them read the field's own spec (`peekFieldSpec`), never a string match.
+ * The one refusal that spans two nodes, a corner pair split across two
+ * setAttribute writes, is VALIDATE-ONLY: a cook runs one node at a time
+ * and never sees the other corner's expression, so only `diagnoseGraph`
+ * reports it.
  */
 import { canonicalOneOf } from "../diagnostics/canonical.js";
 import type { Diagnostic } from "../diagnostics/index.js";
@@ -453,6 +460,19 @@ function cornerCountsP(v: Reading): number[] {
   return axesWhere(v, (row, i) => row.foreign !== true && row.p[i] === 1);
 }
 
+/**
+ * The axes on which BOTH corners are P_i plus something P-free: the box
+ * `box-corner-counts-position` refuses. One rule for setBounds' two params
+ * and for two setAttribute corner writes paired along a chain.
+ */
+function cornerPairAxes(min: Reading, max: Reading): number[] {
+  // A plain corner reads as a literal, so it never tracks P.
+  const lo = cornerCountsP(min);
+  if (lo.length === 0) return [];
+  const hi = new Set(cornerCountsP(max));
+  return lo.filter((a) => hi.has(a));
+}
+
 /** The axes on which a new P carries a box position and no P at all. */
 function pFromBox(v: Reading, addP: boolean): number[] {
   return axesWhere(v, (row, i) => {
@@ -539,11 +559,7 @@ export function boundsFrameFaults(
   if (nodeType === "setBounds") {
     // Only "corners" writes the corners; the anchors never read them.
     if (canonicalOneOf(CORNERS, params.anchor ?? "corners") === undefined) return [];
-    // A plain corner reads as a literal, so it never tracks P.
-    const lo = cornerCountsP(readParam(params.boundsMin));
-    if (lo.length === 0) return [];
-    const hi = new Set(cornerCountsP(readParam(params.boundsMax)));
-    const axes = lo.filter((a) => hi.has(a));
+    const axes = cornerPairAxes(readParam(params.boundsMin), readParam(params.boundsMax));
     if (axes.length === 0) return [];
     return [cornerFault("boundsMin", axes), cornerFault("boundsMax", axes)];
   }
@@ -561,9 +577,10 @@ function singleParamFault(
       if (canonicalOneOf(POINT, params.domain ?? "point") === undefined) return undefined;
       if (canonicalOneOf(F32, params.type ?? "f32") === undefined) return undefined;
       if (!isField(params.value)) return undefined;
-      // A corner written alone is not judged: one corner tracking P can be
-      // half of a box centred on P that reaches a world plane, and the
-      // other corner is in another node.
+      // A corner written alone is not judged here: one corner tracking P
+      // can be half of a box centred on P that reaches a world plane, and
+      // the other corner is in another node. `pairedCornerFaults` pairs the
+      // two writes at validate, where the graph is in view.
       if (name === "P") {
         const axes = pFromBox(readParam(params.value), false);
         return axes.length === 0 ? undefined : positionFault("value", 'writes "P" from a box position', axes);
@@ -611,4 +628,223 @@ export function boundsFrameError(nodeType: string, fault: BoundsFrameFault): Err
 export function refuseBoundsFrameFault(nodeType: string, params: Readonly<Record<string, unknown>>): void {
   const fault = boundsFrameFault(nodeType, params);
   if (fault !== undefined) throw boundsFrameError(nodeType, fault);
+}
+
+// ---------------------------------------------------------------------------
+// The corner pair split across two setAttribute writes. VALIDATE-ONLY: a
+// cook runs one node at a time, so the node writing one corner never sees
+// the expression that wrote the other; `diagnoseGraph` has the whole level
+// in view and reports the pair there, before a cook.
+
+/** One node, as the pairing reads it: its type and live params. */
+export interface CornerChainNode {
+  readonly type: string;
+  readonly params: Readonly<Record<string, unknown>>;
+}
+
+/** The slice of a graph level the pairing walks: its nodes, what feeds a pin, and what reads a node. */
+export interface CornerChainView {
+  readonly node: (id: string) => CornerChainNode | undefined;
+  readonly into: (id: string, pin: string) => readonly { readonly from: string; readonly fromPin: string }[];
+  /** How many connections and declared outputs read `id`'s outputs. */
+  readonly readers: (id: string) => number;
+}
+
+/** A paired-corner refusal, attached to one of the two nodes. */
+export interface PairedCornerFault extends BoundsFrameFault {
+  readonly nodeId: string;
+  /** The node that writes the other corner. */
+  readonly partner: string;
+}
+
+type CornerName = typeof BOX_MIN_ATTR | typeof BOX_MAX_ATTR;
+
+/** P and the two corners: what a node between the two writes must leave alone. */
+const FRAME_ATTRS: ReadonlySet<string> = new Set(["P", BOX_MIN_ATTR, BOX_MAX_ATTR]);
+
+/**
+ * The corner `node` writes as a whole point-domain f32 vector — the
+ * column the box nodes read — or undefined. Decided once per node.
+ */
+function cornerWritten(node: CornerChainNode): CornerName | undefined {
+  if (node.type !== "setAttribute") return undefined;
+  const p = node.params;
+  const name = p.name;
+  if (name !== BOX_MIN_ATTR && name !== BOX_MAX_ATTR) return undefined;
+  if (canonicalOneOf(POINT, p.domain ?? "point") === undefined) return undefined;
+  if (canonicalOneOf(F32, p.type ?? "f32") === undefined) return undefined;
+  if (p.tupleSize !== 3) return undefined;
+  return name;
+}
+
+/**
+ * Whether `node` provably hands every surviving point's P, boundsMin and
+ * boundsMax through unchanged. THE STOP SET IS EVERYTHING ELSE: an
+ * allowlist rather than a list of known offenders, so a node type added
+ * later, a wrapper, a merge, a box node (setBounds, pivotBox, splitBox,
+ * transformBox, ...), transformPoints, promoteAttribute and any node not
+ * read here all end the walk without a pairing. Allowed:
+ * - setAttribute writing some OTHER attribute (any domain) from a value
+ *   that does not read the box: it replaces exactly the column it names.
+ *   One that reads the box could copy the earlier corner into a scalar
+ *   (`hy = box("y1")`), which the later corner would read as a quantity
+ *   while it is the P-tracking corner, so it stops the walk;
+ * - removeAttribute naming none of the three;
+ * - filterByAttribute and filterByExpression: they drop points and keep
+ *   each survivor's columns as they were, so the two corners still meet
+ *   on the same point with the same P.
+ */
+function keepsFrame(node: CornerChainNode): boolean {
+  const p = node.params;
+  switch (node.type) {
+    case "setAttribute":
+      return typeof p.name === "string" && !FRAME_ATTRS.has(p.name) && !readsBox(p.value) && !readsBox(p.select);
+    case "removeAttribute": {
+      const names = p.names;
+      return Array.isArray(names) && names.every((n) => typeof n === "string" && !FRAME_ATTRS.has(n));
+    }
+    case "filterByAttribute":
+    case "filterByExpression":
+      return true;
+    default:
+      return false;
+  }
+}
+
+/**
+ * The node upstream of `id` that writes `other`, reached through the `in`
+ * pins alone and only across {@link keepsFrame} nodes; undefined when the
+ * chain is ambiguous (no feed, or a pin fed twice), leaves through any
+ * other node, or meets a write of P or of either corner first. `shared`
+ * says the partner or a node between them is also read by another branch
+ * (a fan-out), where the partner's corner may be meant as it is.
+ */
+function upstreamPartner(
+  view: CornerChainView,
+  id: string,
+  other: CornerName,
+): { readonly partner: string; readonly shared: boolean } | undefined {
+  const seen = new Set([id]);
+  let at = id;
+  let shared = false;
+  for (;;) {
+    const feeds = view.into(at, "in");
+    if (feeds.length !== 1) return undefined;
+    const { from, fromPin } = feeds[0]!;
+    if (fromPin !== "out" || seen.has(from)) return undefined;
+    seen.add(from);
+    const up = view.node(from);
+    if (up === undefined) return undefined;
+    shared ||= view.readers(from) > 1;
+    const corner = cornerWritten(up);
+    if (corner !== undefined) return corner === other ? { partner: from, shared } : undefined;
+    if (!keepsFrame(up)) return undefined;
+    at = from;
+  }
+}
+
+/**
+ * Whether a spec reads the point's box anywhere — a box name or a corner
+ * attribute, sizes included — or cannot be seen into. The later of two
+ * corner writes reads the box the earlier one just WROTE, which is not
+ * the box a setBounds corner reads: `box("size")` there is the new max
+ * minus the P-tracking min, so a coefficient on P read through it is not
+ * the corner's own. Such a write is not paired at all.
+ */
+function readsBox(spec: unknown): boolean {
+  if (Array.isArray(spec)) return spec.some(readsBox);
+  if (typeof spec !== "object" || spec === null) return false;
+  if (isField(spec)) {
+    const inner = peekFieldSpec(spec);
+    return inner === undefined || readsBox(inner);
+  }
+  const node = spec as Record<string, unknown>;
+  if (node.fn === "box") return true;
+  if (node.fn === "attribute" && (node.name === BOX_MIN_ATTR || node.name === BOX_MAX_ATTR)) return true;
+  if (node.fn === "param") {
+    const spliced = paramSpecOf(node as FieldSpec);
+    if (spliced !== undefined) return readsBox(spliced);
+    return opaqueParam(node as FieldSpec);
+  }
+  return specChildEntries(node).some((c) => readsBox(c.value));
+}
+
+const PAIR_FIX =
+  'Drop position() from both corners and keep the offsets (boundsMin [-4, 0, -3] puts the min corner 4 left of, level with and 3 behind each point), or replace the two setAttribute nodes with one setBounds that sizes the box about the point with "anchor" "center", "baseCenter" or "min" and a "size"';
+
+/**
+ * The fix when the earlier node also feeds another branch: change this
+ * chain alone, since editing the shared node would change that branch too.
+ */
+function sharedFix(earlier: string, later: string): string {
+  return (
+    `node ${JSON.stringify(earlier)} also feeds another branch, where its corner may be meant as it is, so change this ` +
+    `chain alone: replace node ${JSON.stringify(later)} with one setBounds that sizes the box about the point with ` +
+    `"anchor" "center", "baseCenter" or "min" and a "size" (it writes both corners, on this chain only), or drop ` +
+    `position() from ${JSON.stringify(later)} once its corner is relative to the point`
+  );
+}
+
+function pairFault(
+  nodeId: string,
+  own: CornerName,
+  partner: string,
+  where: "upstream" | "downstream",
+  axes: readonly number[],
+  fix: string,
+): PairedCornerFault {
+  const axisWord = axes.length === 1 ? "axis" : "axes";
+  const other = own === BOX_MIN_ATTR ? BOX_MAX_ATTR : BOX_MIN_ATTR;
+  return {
+    code: "box-corner-counts-position",
+    param: "value",
+    nodeId,
+    partner,
+    message:
+      `param "value" writes "${own}" as position() plus an offset on ${axisWord} ${axisList(axes)}, and node ` +
+      `${JSON.stringify(partner)} (setAttribute), ${where} of it on the same chain with nothing between them that rewrites ` +
+      `P or either corner, writes "${other}" the same way, so together the two corners keep the box's size and move it ` +
+      `with P there — the world box at P that corners described before bounds became local — and that counts P twice: ` +
+      `${FRAME}, so the point's transform adds P to both corners again and the box lands at twice P. ${fix}.`,
+    expected: "corners relative to the point, with no position() term",
+  };
+}
+
+/**
+ * The `box-corner-counts-position` refusals one graph level earns from a
+ * box whose corners two setAttribute nodes write: for each point-domain
+ * f32 vector write of one corner among `ids`, the nearest write of the
+ * other corner upstream along the same chain (see {@link upstreamPartner}
+ * for what the chain may cross), judged by exactly the rule setBounds'
+ * own corners are. One record per node, each naming the other, upstream
+ * node first; empty for a sound level. Validate-only (see above). A chain
+ * min -> max -> min gives the middle node two records, one per partner:
+ * each pair is a box some node on the chain hands on.
+ */
+export function pairedCornerFaults(ids: Iterable<string>, view: CornerChainView): PairedCornerFault[] {
+  const out: PairedCornerFault[] = [];
+  for (const id of ids) {
+    const node = view.node(id);
+    if (node === undefined) continue;
+    const corner = cornerWritten(node);
+    if (corner === undefined) continue;
+    const otherName = corner === BOX_MIN_ATTR ? BOX_MAX_ATTR : BOX_MIN_ATTR;
+    const found = upstreamPartner(view, id, otherName);
+    if (found === undefined) continue;
+    const partnerId = found.partner;
+    const partner = view.node(partnerId)!;
+    // The later write reading the box the earlier one wrote is not judged.
+    if (readsBox(node.params.value)) continue;
+    const later = readParam(node.params.value);
+    const earlier = readParam(partner.params.value);
+    const axes =
+      corner === BOX_MIN_ATTR ? cornerPairAxes(later, earlier) : cornerPairAxes(earlier, later);
+    if (axes.length === 0) continue;
+    const fix = found.shared ? sharedFix(partnerId, id) : PAIR_FIX;
+    out.push(
+      pairFault(partnerId, otherName, id, "downstream", axes, fix),
+      pairFault(id, corner, partnerId, "upstream", axes, fix),
+    );
+  }
+  return out;
 }

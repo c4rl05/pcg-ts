@@ -47,6 +47,9 @@
  *   set from a box position — which that node's execute refuses
  *   ({@link boundsFrameFaults}). Judged on the field's own expression, so
  *   this is the cook's refusal, seen before the cook.
+ *   One more is validate-only: a box whose two corners two setAttribute
+ *   nodes on one chain write as position() plus an offset
+ *   ({@link pairedCornerFaults}), which no single node's execute can see.
  * - `asset-output-unused` (warning): a top-level output declared
  *   `role: "asset"` names an id no `spawnInstances` can emit, so the mesh
  *   it supplies is never drawn. Reported only when EVERY spawner's id set
@@ -82,7 +85,12 @@ import {
   analyzeStarvation,
   starvedPinKeys,
 } from "../graph/subgraph.js";
-import { boundsFrameFaults } from "./boundsFrame.js";
+import {
+  type BoundsFrameFault,
+  type CornerChainView,
+  boundsFrameFaults,
+  pairedCornerFaults,
+} from "./boundsFrame.js";
 import { describeGraphAssets, describeSuppliedAssets } from "./graphAssets.js";
 import { type StrandedGraphParamValue, strandedGraphParamValues } from "./graphParams.js";
 import { subgraphRefOf } from "./subgraphRefs.js";
@@ -179,6 +187,29 @@ function diagnoseLevel(
     if (list === undefined) starvedByNode.set(s.nodeId, [s]);
     else list.push(s);
   }
+  // A box whose two corners two setAttribute nodes write, judged as one
+  // setBounds would be: validate-only, since a cook sees one node at a time
+  // (see boundsFrame.ts). Only reachable nodes are judged; each record
+  // lands with its own node, below.
+  const pairedByNode = new Map<string, BoundsFrameFault[]>();
+  const readersOf = new Map<string, number>();
+  for (const into of graph._inTo.values()) {
+    for (const c of into) readersOf.set(c.from, (readersOf.get(c.from) ?? 0) + 1);
+  }
+  const cornerChain: CornerChainView = {
+    node: (id) => {
+      const s = graph._nodes.get(id);
+      return s === undefined ? undefined : { type: typeOf(s.def), params: s.params };
+    },
+    into: (id, pin) => (graph._inTo.get(id) ?? []).filter((c) => c.toPin === pin),
+    readers: (id) => (readersOf.get(id) ?? 0) + graph._outputs.filter((o) => o.node === id).length,
+  };
+  const judged = [...graph._nodes.keys()].filter((id) => reachable.has(id) && portals?.has(id) !== true);
+  for (const fault of pairedCornerFaults(judged, cornerChain)) {
+    const list = pairedByNode.get(fault.nodeId);
+    if (list === undefined) pairedByNode.set(fault.nodeId, [fault]);
+    else list.push(fault);
+  }
   const bodies: { readonly id: string; readonly body: Graph; readonly empty: Set<string> }[] = [];
   for (const state of graph._nodes.values()) {
     // A portal is plumbing: it has no inputs, and a portal feeding an inner
@@ -237,7 +268,7 @@ function diagnoseLevel(
     }
     // The refusal the node's own execute raises, reported before a cook
     // does: a box mixed with the world (see boundsFrame.ts).
-    for (const frame of boundsFrameFaults(type, state.params)) {
+    for (const frame of [...boundsFrameFaults(type, state.params), ...(pairedByNode.get(state.id) ?? [])]) {
       out.push({
         code: frame.code,
         severity: "error",
