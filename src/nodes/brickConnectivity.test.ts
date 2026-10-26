@@ -49,7 +49,10 @@ const UNIT: V3 = [1, 1, 1];
 const PLATE: V3 = [1, 0.4, 1];
 const ZERO: V3 = [0, 0, 0];
 
-/** A cloud of one point per box, corners as absolute world positions. */
+/**
+ * A cloud of one point per box, P at its world centre and its corners
+ * LOCAL to P (world = P + corner), as every box node reads them.
+ */
 function boxCloud(specs: readonly BoxSpec[], pitch: V3 = UNIT, origin: V3 = ZERO): Geometry {
   const geo = createPointCloud(specs.length);
   const pts = geo.attrs.point;
@@ -61,9 +64,10 @@ function boxCloud(specs: readonly BoxSpec[], pitch: V3 = UNIT, origin: V3 = ZERO
   specs.forEach((s, i) => {
     const lo = s.lo.map((v, c) => (origin[c] as number) + v * (pitch[c] as number));
     const hi = s.hi.map((v, c) => (origin[c] as number) + v * (pitch[c] as number));
-    bMin.setTuple(i, lo);
-    bMax.setTuple(i, hi);
-    P.setTuple(i, lo.map((a, c) => 0.5 * (a + (hi[c] as number))));
+    const centre = lo.map((a, c) => Math.fround(0.5 * (a + (hi[c] as number))));
+    P.setTuple(i, centre);
+    bMin.setTuple(i, lo.map((a, c) => a - (centre[c] as number)));
+    bMax.setTuple(i, hi.map((b, c) => b - (centre[c] as number)));
     seed.set(i, s.seed ?? hashCombine(0xc0de, i));
     tag.set(i, s.tag ?? i);
   });
@@ -91,15 +95,37 @@ function column(geo: Geometry, name: string): number[] {
   return Array.from({ length: geo.pointCount }, (_, i) => col.get(i));
 }
 
-/** Read boxes back from a geometry's corner columns, in cells. */
+/**
+ * Read boxes back as WORLD boxes, in cells: each point's local corners
+ * mapped through P, rot (a quarter turn about y at most) and scale, the
+ * axis-aligned box of the eight. Written here from the reading, sharing no
+ * code with the node.
+ */
 function readBoxes(geo: Geometry, pitch: V3 = UNIT, origin: V3 = ZERO): BoxSpec[] {
-  const bMin = geo.attrs.point.require("boundsMin");
-  const bMax = geo.attrs.point.require("boundsMax");
+  const pts = geo.attrs.point;
+  const bMin = pts.require("boundsMin");
+  const bMax = pts.require("boundsMax");
   const cell = (v: number, c: number) => Math.round((v - (origin[c] as number)) / (pitch[c] as number));
-  return Array.from({ length: geo.pointCount }, (_, i) => ({
-    lo: [0, 1, 2].map((c) => cell(bMin.get(i, c), c)) as V3,
-    hi: [0, 1, 2].map((c) => cell(bMax.get(i, c), c)) as V3,
-  }));
+  return Array.from({ length: geo.pointCount }, (_, i) => {
+    const P = pts.require("P").getTuple(i);
+    const [, qy, , qw] = pts.require("rot").getTuple(i);
+    const s = pts.require("scale").getTuple(i);
+    // About y by theta: x' = cos x + sin z, z' = -sin x + cos z.
+    const theta = 2 * Math.atan2(qy as number, qw as number);
+    const cs = Math.round(Math.cos(theta));
+    const sn = Math.round(Math.sin(theta));
+    const xs: number[][] = [[], [], []];
+    for (let k = 0; k < 8; k++) {
+      const v = [0, 1, 2].map((a) => ((k >> a) & 1 ? bMax.get(i, a) : bMin.get(i, a)) * (s[a] as number));
+      xs[0]!.push((P[0] as number) + cs * (v[0] as number) + sn * (v[2] as number));
+      xs[1]!.push((P[1] as number) + (v[1] as number));
+      xs[2]!.push((P[2] as number) - sn * (v[0] as number) + cs * (v[2] as number));
+    }
+    return {
+      lo: [0, 1, 2].map((c) => cell(Math.min(...xs[c]!), c)) as V3,
+      hi: [0, 1, 2].map((c) => cell(Math.max(...xs[c]!), c)) as V3,
+    };
+  });
 }
 
 const solidBox = (b: BoxSpec): boolean => [0, 1, 2].every((c) => (b.hi[c] as number) > (b.lo[c] as number));
@@ -430,6 +456,14 @@ describe("brickConnectivity: degenerate", () => {
     expect(out.attrs.detail.require("islands").get(0)).toBe(0);
   });
 
+  it("skips a box of no volume wherever it sits: an off-lattice, oddly rotated P is not refused", async () => {
+    const geo = boxCloud([{ lo: [0, 0, 0], hi: [2, 3, 2] }, { lo: [4, 0, 0], hi: [4, 3, 2] }]);
+    geo.attrs.point.require("P").setTuple(1, [4.3, 0.7, 1.1]);
+    geo.attrs.point.require("rot").setTuple(1, [0.6, 0, 0, 0.8]);
+    const out = await connect(geo);
+    expect(column(out, "step")).toEqual([0, -1]);
+  });
+
   it("gives zero-volume boxes -1 for both and counts no island", async () => {
     const geo = boxCloud([
       { lo: [0, 0, 0], hi: [3, 0, 2] },
@@ -465,12 +499,47 @@ describe("brickConnectivity: refusals", () => {
     await expect(connect(ok)).resolves.toBeDefined();
   });
 
+  it("reads each brick through its transform: a quarter turn about y swaps its extents, any whole number of quarter turns is read", async () => {
+    // A 2 x 3 x 1 plate turned a quarter turn spans 1 along x and 2 along z;
+    // a 1 x 3 x 2 one stands on it, unturned, in the same cells.
+    const bricks = (list: [number[], number[], number[]][]) => {
+      const g = createPointCloud(list.length);
+      list.forEach(([P, rot, scale], i) => {
+        g.attrs.point.require("P").setTuple(i, P);
+        g.attrs.point.require("rot").setTuple(i, rot);
+        g.attrs.point.require("scale").setTuple(i, scale);
+        g.attrs.point.require("boundsMin").setTuple(i, [-0.5, -0.5, -0.5]);
+        g.attrs.point.require("boundsMax").setTuple(i, [0.5, 0.5, 0.5]);
+        g.attrs.point.require("seed").set(i, 7 + i);
+      });
+      return g;
+    };
+    const s = Math.fround(Math.SQRT1_2);
+    for (const rot of [[0, s, 0, s], [0, -s, 0, s], [0, 1, 0, 0], [0, 0, 0, 1]]) {
+      const turnedQuarter = rot[3] !== 0 && rot[1] !== 0;
+      const both = bricks([
+        [[0.5, 0.5, 1], rot, turnedQuarter ? [2, 1, 1] : [1, 1, 2]],
+        [[0.5, 1.5, 1], [0, 0, 0, 1], [1, 1, 2]],
+      ]);
+      expect([rot, column(await connect(both), "island")]).toEqual([rot, [0, 0]]);
+      // Shifted half a stud off the lattice, the turned brick is refused.
+      const off = bricks([[[1, 0.5, 1], rot, turnedQuarter ? [2, 1, 1] : [1, 1, 2]]]);
+      expect(await refusal(off)).toContain("not on the lattice");
+    }
+  });
+
+  it("refuses a rotation that is not a whole number of quarter turns about y, naming the point", async () => {
+    const geo = boxCloud([{ lo: [0, 0, 0], hi: [2, 3, 2] }, { lo: [4, 0, 0], hi: [6, 3, 2] }]);
+    geo.attrs.point.require("rot").setTuple(1, [Math.sin(0.1), 0, 0, Math.cos(0.1)]);
+    expect(await refusal(geo)).toMatch(/^brickConnectivity: point 1 has rot \[.*\], which is not a whole number of quarter turns about y/);
+  });
+
   it("refuses an off-lattice corner, naming the point and the corner", async () => {
     const geo = boxCloud([
       { lo: [0, 0, 0], hi: [2, 3, 2] },
       { lo: [4, 0, 0], hi: [6, 3, 2] },
     ]);
-    geo.attrs.point.require("boundsMin").set(1, 4.5, 0);
+    geo.attrs.point.require("boundsMin").set(1, -0.5, 0); // local to P.x = 5: the world corner at x = 4.5
     const m = await refusal(geo);
     expect(m.startsWith("brickConnectivity:")).toBe(true);
     expect(m).toContain("point 1");

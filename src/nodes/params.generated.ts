@@ -777,16 +777,17 @@ export type BoxesToMeshOutputs = "out";
  */
 export interface BrickConnectivityParams {
   /**
-   * POINT attribute (f32 or i32, tuple size 3) holding each brick's minimum corner in WORLD
-   * units, as packBricks writes it. Refused, naming the point, unless every component lands
-   * on the lattice.
+   * POINT attribute (f32 or i32, tuple size 3) holding each brick's minimum corner in the
+   * point's OWN frame, as packBricks writes it (the unit box) and every box node reads
+   * boundsMin; mapped through P, rot and scale to its world box. Refused, naming the point,
+   * unless every world corner lands on the lattice.
    *
    * @defaultValue `"boundsMin"`
    */
   minAttr: string;
   /**
-   * POINT attribute (f32 or i32, tuple size 3) holding each brick's maximum corner in world
-   * units, on the same terms as `minAttr`.
+   * POINT attribute (f32 or i32, tuple size 3) holding each brick's maximum corner in the
+   * point's own frame, on the same terms as `minAttr`.
    *
    * @defaultValue `"boundsMax"`
    */
@@ -2791,18 +2792,20 @@ export type OrientAlongVectorOutputs = "out";
  */
 export interface PackBricksParams {
   /**
-   * POINT attribute (f32 or i32, tuple size 3) holding each box's minimum corner in WORLD
-   * units — the absolute corner, not an offset from P, which is what setBounds writes.
-   * Converted to lattice cells through `pitch` and `origin` and refused, naming the point,
-   * unless every component lands on a lattice plane.
+   * POINT attribute (f32 or i32, tuple size 3) holding each box's minimum corner in the
+   * point's OWN frame, as every box node reads boundsMin: the world corner is P + this (the
+   * point must carry the identity rotation and scale [1, 1, 1]). Converted to lattice cells
+   * through `pitch` and `origin` and refused, naming the point, unless every component lands
+   * on a lattice plane.
    *
    * @defaultValue `"boundsMin"`
    */
   minAttr: string;
   /**
-   * POINT attribute (f32 or i32, tuple size 3) holding each box's maximum corner in world
-   * units, on the same terms as `minAttr`. A box with a maximum below its minimum on any
-   * axis is refused; one with zero extent on an axis covers no cells and is skipped.
+   * POINT attribute (f32 or i32, tuple size 3) holding each box's maximum corner in the
+   * point's own frame, on the same terms as `minAttr`. A box with a maximum below its
+   * minimum on any axis is refused; one with zero extent on an axis covers no cells and is
+   * skipped.
    *
    * @defaultValue `"boundsMax"`
    */

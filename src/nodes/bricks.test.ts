@@ -49,9 +49,10 @@ const ZERO: V3 = [0, 0, 0];
 const S = Math.fround(Math.SQRT1_2);
 
 /**
- * A cloud of one point per box, corners written as ABSOLUTE world
- * positions (origin + cell * pitch), P at the box centre and a genuine
- * per-point seed so identity rests on more than position.
+ * A cloud of one point per box: P at the box's world centre (origin +
+ * cell * pitch), its corners LOCAL to P as every box node reads them
+ * (world = P + corner), and a genuine per-point seed so identity rests on
+ * more than position.
  */
 function boxCloud(specs: readonly BoxSpec[], pitch: V3 = UNIT, origin: V3 = ZERO): Geometry {
   const geo = createPointCloud(specs.length);
@@ -66,9 +67,10 @@ function boxCloud(specs: readonly BoxSpec[], pitch: V3 = UNIT, origin: V3 = ZERO
   specs.forEach((s, i) => {
     const lo = s.lo.map((v, c) => (origin[c] as number) + v * (pitch[c] as number));
     const hi = s.hi.map((v, c) => (origin[c] as number) + v * (pitch[c] as number));
-    bMin.setTuple(i, lo);
-    bMax.setTuple(i, hi);
-    P.setTuple(i, lo.map((a, c) => 0.5 * (a + (hi[c] as number))));
+    const centre = lo.map((a, c) => Math.fround(0.5 * (a + (hi[c] as number))));
+    P.setTuple(i, centre);
+    bMin.setTuple(i, lo.map((a, c) => a - (centre[c] as number)));
+    bMax.setTuple(i, hi.map((b, c) => b - (centre[c] as number)));
     seed.set(i, s.seed ?? hashCombine(0xb41c, i));
     tag.set(i, s.tag ?? i);
     if (s.color !== undefined) color.setTuple(i, s.color);
@@ -108,11 +110,19 @@ interface Brick {
   P: number[];
   rot: number[];
   scale: number[];
+  /** The WORLD corners, from the transform. */
   bMin: number[];
   bMax: number[];
+  /** The stored (local) boundsMin / boundsMax. */
+  localMin: number[];
+  localMax: number[];
 }
 
-/** Read every output brick back, converting its world corners to cells. */
+/**
+ * Read every output brick back, converting its WORLD box to cells: the
+ * local corners mapped through P, rot (the identity or a quarter turn
+ * about y) and scale, the axis-aligned box of the eight.
+ */
 function readBricks(geo: Geometry, pitch: V3 = UNIT, origin: V3 = ZERO): Brick[] {
   const pts = geo.attrs.point;
   const get = (name: string) => pts.require(name);
@@ -121,11 +131,21 @@ function readBricks(geo: Geometry, pitch: V3 = UNIT, origin: V3 = ZERO): Brick[]
   for (let i = 0; i < pts.count; i++) {
     const bMin = get("boundsMin").getTuple(i);
     const bMax = get("boundsMax").getTuple(i);
+    const P = get("P").getTuple(i);
+    const r = get("rot").getTuple(i);
+    const s = get("scale").getTuple(i);
+    const turned = (r[1] as number) !== 0;
+    const world = [0, 1, 2].map((c) => {
+      // A quarter turn about y swaps the local x and z extents.
+      const a = turned && c !== 1 ? 2 - c : c;
+      const h = 0.5 * ((bMax[a] as number) - (bMin[a] as number)) * (s[a] as number);
+      return [(P[c] as number) - h, (P[c] as number) + h];
+    });
     const lo = [0, 1, 2].map((c) =>
-      Math.round(((bMin[c] as number) - (origin[c] as number)) / (pitch[c] as number)),
+      Math.round(((world[c]![0] as number) - (origin[c] as number)) / (pitch[c] as number)),
     ) as V3;
     const hi = [0, 1, 2].map((c) =>
-      Math.round(((bMax[c] as number) - (origin[c] as number)) / (pitch[c] as number)),
+      Math.round(((world[c]![1] as number) - (origin[c] as number)) / (pitch[c] as number)),
     );
     out.push({
       lo,
@@ -138,8 +158,10 @@ function readBricks(geo: Geometry, pitch: V3 = UNIT, origin: V3 = ZERO): Brick[]
       P: get("P").getTuple(i),
       rot: get("rot").getTuple(i),
       scale: get("scale").getTuple(i),
-      bMin,
-      bMax,
+      bMin: world.map((w) => w[0] as number),
+      bMax: world.map((w) => w[1] as number),
+      localMin: bMin,
+      localMax: bMax,
     });
   }
   return out;
@@ -297,10 +319,8 @@ describe("packBricks: what a brick is", () => {
       expect(b.scale[0]).toBeCloseTo(w * 1, 5);
       expect(b.scale[1]).toBeCloseTo(h * 0.4, 5);
       expect(b.scale[2]).toBeCloseTo(d * 1, 5);
-      // P is the centre of the world corners.
-      for (let c = 0; c < 3; c++) {
-        expect(b.P[c]).toBeCloseTo(0.5 * ((b.bMin[c] as number) + (b.bMax[c] as number)), 5);
-      }
+      // The stored box is the UNIT box: the brick's box in its own frame.
+      expect([b.localMin, b.localMax]).toEqual([[-0.5, -0.5, -0.5], [0.5, 0.5, 0.5]]);
       // A unit box through T * R * S lands on the bounds.
       const lo = [Infinity, Infinity, Infinity];
       const hi = [-Infinity, -Infinity, -Infinity];
@@ -614,7 +634,7 @@ describe("packBricks: refusals", () => {
       { lo: [0, 0, 0], hi: [2, 3, 2] },
       { lo: [4, 0, 0], hi: [6, 3, 2] },
     ]);
-    geo.attrs.point.require("boundsMin").set(1, 4.5, 0);
+    geo.attrs.point.require("boundsMin").set(1, -0.5, 0); // local to P.x = 5: the world corner at x = 4.5
     const m = await refusal(geo);
     expect(m).toContain("point 1");
     expect(m).toContain("boundsMin.x");
@@ -623,10 +643,51 @@ describe("packBricks: refusals", () => {
 
   it("refuses a maximum below the minimum", async () => {
     const geo = boxCloud([{ lo: [0, 0, 0], hi: [2, 3, 2] }]);
-    geo.attrs.point.require("boundsMax").set(0, -1, 2);
+    geo.attrs.point.require("boundsMax").set(0, -2, 2); // local: below boundsMin.z = -1
     const m = await refusal(geo);
     expect(m).toContain("point 0");
     expect(m).toContain("boundsMax.z below boundsMin.z");
+  });
+
+  it("reads each box in its point's frame: local corners at P pack exactly as the same world corners at the origin", async () => {
+    const specs: BoxSpec[] = [
+      { lo: [0, 0, 0], hi: [6, 3, 4] },
+      { lo: [2, 3, 1], hi: [5, 5, 3] },
+    ];
+    const local = await pack(boxCloud(specs, PLATE), { pitch: PLATE });
+    // The same boxes with P at the origin and WORLD corners.
+    const world = boxCloud(specs, PLATE);
+    const pts = world.attrs.point;
+    for (let i = 0; i < pts.count; i++) {
+      const P = pts.require("P").getTuple(i);
+      pts.require("boundsMin").setTuple(i, pts.require("boundsMin").getTuple(i).map((v, c) => v + (P[c] as number)));
+      pts.require("boundsMax").setTuple(i, pts.require("boundsMax").getTuple(i).map((v, c) => v + (P[c] as number)));
+      pts.require("P").setTuple(i, [0, 0, 0]);
+    }
+    const atOrigin = await pack(world, { pitch: PLATE });
+    const strip = (b: Brick) => ({ ...b, tag: 0 });
+    expect(readBricks(local.out, PLATE).map(strip)).toEqual(readBricks(atOrigin.out, PLATE).map(strip));
+    expect(local.out.pointCount).toBeGreaterThan(2);
+  });
+
+  it("refuses a rotated or scaled box, naming the point: the lattice is axis-aligned", async () => {
+    for (const [col, v] of [
+      ["rot", [0, Math.SQRT1_2, 0, Math.SQRT1_2]],
+      ["scale", [2, 1, 1]],
+      ["scale", [-1, 1, 1]],
+    ] as const) {
+      const geo = boxCloud([{ lo: [0, 0, 0], hi: [2, 3, 2] }, { lo: [4, 0, 0], hi: [6, 3, 2] }]);
+      geo.attrs.point.require(col).setTuple(1, v);
+      const m = await refusal(geo);
+      expect(m).toMatch(/^packBricks: point 1 has rot \[.*\] and scale \[.*\]; its box is read in its own frame/);
+      expect(m).toContain("identity rotation and scale [1, 1, 1]");
+    }
+    // A zero quaternion is the identity, and so is w = 1 written unnormalized.
+    for (const q of [[0, 0, 0, 0], [0, 0, 0, 2]]) {
+      const geo = boxCloud([{ lo: [0, 0, 0], hi: [2, 3, 2] }]);
+      geo.attrs.point.require("rot").setTuple(0, q);
+      expect((await pack(geo)).out.pointCount).toBeGreaterThan(0);
+    }
   });
 
   it("refuses a pitch with x and z different", async () => {
@@ -722,6 +783,15 @@ describe("packBricks: degenerate", () => {
     expectEmpty(out);
     expectEmpty(studs);
     expect(out.attrs.detail.require("islands").get(0)).toBe(0);
+  });
+
+  it("skips a box of no volume wherever it sits: the default zero box at an off-lattice, rotated, scaled P is not refused", async () => {
+    const geo = boxCloud([{ lo: [0, 0, 0], hi: [2, 3, 2] }, { lo: [4, 0, 0], hi: [4, 3, 2] }]);
+    geo.attrs.point.require("P").setTuple(1, [4.3, 0.7, 1.1]);
+    geo.attrs.point.require("rot").setTuple(1, [0.6, 0, 0, 0.8]);
+    geo.attrs.point.require("scale").setTuple(1, [2, 2, 2]);
+    const { out } = await pack(geo);
+    expect(readBricks(out).every((b) => b.tag === 0)).toBe(true);
   });
 
   it("cooks zero-volume boxes to two empty pins", async () => {
@@ -1506,7 +1576,8 @@ describe("packBricks: attaching floating pieces", () => {
     const geo = firstGeo(r.out);
     const step = geo.attrs.point.require("step");
     const island = geo.attrs.point.require("island");
-    const lo = geo.attrs.point.require("boundsMin");
+    const P = geo.attrs.point.require("P");
+    const scale = geo.attrs.point.require("scale");
     const pieces = new Set<number>();
     const courses = new Set<number>();
     let bricks = 0;
@@ -1514,7 +1585,8 @@ describe("packBricks: attaching floating pieces", () => {
       if (step.get(i) >= 0) continue;
       bricks++;
       pieces.add(island.get(i));
-      courses.add(lo.get(i, 1));
+      // The brick's world bottom, from its transform (a unit pitch here).
+      courses.add(Math.round(P.get(i, 1) - 0.5 * scale.get(i, 1)));
     }
     return { pieces: pieces.size, bricks, courses: [...courses].sort((a, b) => a - b) };
   }

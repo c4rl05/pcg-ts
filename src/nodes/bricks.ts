@@ -204,7 +204,7 @@ export const packBricks = standardNode<PackBricksParams, PackBricksInputs, PackB
   type: NODE,
   category: "point op",
   description:
-    "Reads axis-aligned BOXES on a stud lattice — one per point, its corners in two point attributes — and writes the BRICKS that build them: one point per brick, from a stated catalogue of footprints, that together fill exactly the lattice cells the boxes cover. The lattice is `pitch` in world units per cell (a stud is 1 across, a plate 0.4 tall, by default), anchored at `origin`; x and z count studs and y counts plates. Every corner must land on the lattice, and one that does not is refused naming the point and the corner, because a box half a stud off is a box the graph upstream built on a different lattice. Boxes may overlap: their cells are unioned, and a cell two boxes claim belongs to the one with the lower point IDENTITY (stored position bits plus `seed`), never the lower array index, so shuffling the input changes nothing — unless two overlapping boxes share both P and `seed`, which identity cannot tell apart, and then the earlier one in the input wins. WHAT A BRICK MAY NOT CROSS is `groupBy`: cells whose boxes differ in any listed attribute are different material and never share a brick, so a wall's colour changes exactly where its boxes' colour does. Each brick carries every point attribute of the box that owns its anchor cell. THE PACKING IS A SCANLINE GREEDY, course by course from the bottom and within a course in z then x. The first unfilled cell of a scan is always the minimum corner of the brick that covers it, so the scan is complete without backtracking; the choice there is WHICH catalogue entry, either way round. HEIGHT COMES FIRST: the tallest entry that fits is the course, so a wall is laid in full bricks and plates appear only where the space is shorter than a brick. Among footprints of that height the score is the footprint in studs less `stagger` for every stud of joint in the brick's bottom course that sits directly on a seam in the course below, counted only on the joints the placement decides — where the cell across is the same material and not yet filled — a running bond, the reason real walls hold together, charged only where a different brick could have avoided it — PLUS `bond` for every two separate pieces the placement joins into one, which is what keeps a floor or a roof laid over an empty room from coming out as loose plates (pieces as stud clutch holds them; see `islandsAttr`). AHEAD OF THAT SCORE, WITHIN THE HEIGHT, COMES WHAT HOLDS. A brick is gripped only through its top and bottom faces, so a placement with no brick under its footprint and no cell to be filled over it — a plate in the middle of a one-plate floor, over an empty room and under another — is loose in every build order. A placement that would leave a cell beside it with no HELD placement left to cover it STRANDS the cell: whatever brick covered it would be loose too. So each placement is charged the loose bricks it commits the build to — one if it is held by nothing, plus one for every cell it strands — and the fewest wins, then a held placement over one held by nothing, then the score. Both charges only ever decide where a course has cells with nothing under or over them; a wall, or anything standing on what is below it, packs by the score alone. Ties go to the larger footprint, then the earlier catalogue entry, then the entry as listed rather than turned. If nothing fits — a catalogue with no 1x1 plate meeting a one-plate gap — the cell is refused by name rather than left empty, so the output always covers the input exactly. THE HOLD SEARCH answers what that one-placement look cannot see: a trap set two or more placements back, an early brick that took the grip a later cell needed. Wherever a course comes out with a brick held by nothing, that course is laid again with each REGION around such a brick — the course's cells of that material that were unfilled when the course began, joined side to side — packed by an EXACT search for a packing in which every brick is held: depth first over the held placements alone, first in scan order and then from the cell the fewest of them cover, each cell's placements tried by the same score, a placement dropped the moment it leaves a cell of the region with no held placement over it, and a failure going straight back to the latest placement to blame for it. Its first answer is the greedy's own choice wherever that choice holds. It is bounded in STEPS of work, never in time, so the result is the same on every machine and under any load: " + String(holdBudget.region) + " per region and " + String(holdBudget.cook) + " per cook, a few milliseconds for the regions a generated house has and some 30 ms at the bound. Where the search in scan order runs out, three more answers are asked, each exact and each bounded in steps of its own (" + String(holdBudget.parity) + " and " + String(holdBudget.cuts) + " per region, " + String(holdBudget.settle) + " per cook, for the first and last; " + String(holdBudget.probe) + " per region and " + String(holdBudget.probeCook) + " per cook, and at most " + String(holdBudget.probeCells) + " cells, for the second): first two proofs that no held packing exists, before the search from the fewest goes on — a PARITY proof, if no set of held placements covers every cell of the region an odd number of times, which is what rules out a one-plate floor walled round whose middle every plate reaches only by an even length, a 21 x 21 slab among them, and PROBES, cases on one cell: each held placement over it is taken in turn with every placement it forces (a cell left exactly one held placement clear of those taken), and if each comes to a cell nothing can cover, or to two forced placements that overlap, no packing exists, which is what rules out a floor over posts too far apart, where a cell only a baseplate reaches leaves another such cell nothing — and, where the search from the fewest runs out as well, a packing by STRAIGHT CUTS — the region's bounding box cut across, again and again, into rectangles each empty or one held catalogue entry — which finds the baseplate-and-strips packings of a big walled slab that a search laying one brick at a time from a corner does not reach. A region proven to have no held packing (a cell no held brick can reach is the usual proof, the parity count and the probes the next most common), one nothing answered within its budget, and one that mixes brick heights are laid by the greedy as before — byte for byte in a course where no region was solved; where one was, its bricks can join pieces the greedy weighs elsewhere in the course. The course is laid again only from the first cell of its new regions, every brick before it kept, and a brick after it is weighed again only where something the greedy reads there — the course's cells round it, the pieces under it — can differ from the laying before; everywhere else the earlier choice stands, so the course comes out brick for brick as laying all of it again would. A course with no brick held by nothing is never searched, so it packs exactly as the greedy alone does. Where the search ran on a course as laid (the regions the ground repair below asks for are its own, and counted there), `out` carries a DETAIL u32 `holdSearch` of four counts — regions searched, solved, proven to have no held packing, and left to the greedy unproven (budget spent, or heights mixed) — and where it never ran there is no such attribute. A BRICK CAN BE HELD AND STILL HANG FROM NOTHING: bricks that hold each other across two or more courses — a floor's edge row under a roof's edge column — with none of them standing on anything that reaches the bottom course, which no look at one course sees. So the finished build is asked what brickConnectivity asks for step -1: the pieces stud clutch makes, and whether each holds a brick of the bottom course. A piece that does not is FLOATING, and is repaired course by course, its lowest first: the build is taken back to that course and laid again from it, with the regions round the piece's bricks there packed by the hold search under one more demand — a brick over a cell of the piece must also cover a cell standing on a brick of a piece that already reaches the bottom course — and every course above laid on that as usual. A repair is kept only if the build it makes, asked again, floats fewer bricks; otherwise the build is put back exactly as it was. A course where a brick of the piece lies in a region the hold search came back from without a held packing is not asked (a firm packing is a held one). Each course asked costs every cell from it up, against a budget of " + String(holdBudget.ground) + " cells per cook, never time. Where something floated, `out` carries a DETAIL u32 `groundRepair` of six counts — floating pieces and their bricks before the repair, the same after it (as asked of the finished build, never assumed), courses asked, and repairs kept — and where nothing floated there is no such attribute and the build is packed exactly as without the repair. OUTPUT `out`: one point per brick in scan order. P is the brick's centre, `rot` a quarter turn about y when the entry was placed turned (identity otherwise), and `scale` its full extents in its OWN frame — w and d studs and h plates as listed, in world units — so a unit box copied onto these points draws every brick in place. `boundsMin`/`boundsMax` are its world corners, the same convention it reads. `brick` (string) is the entry as `WxDxH`, ready to be spawnInstances' `assetAttr`, and `brickIndex` (i32) is its position in the catalogue — `bricks` followed by `extraBricks`. OUTPUT `studs`: one point per stud left SHOWING — on a brick's top where the lattice cell above is empty — at the stud's base centre on the brick's top face, carrying the brick's attributes and its `brick`/`brickIndex`, plus `brickId` and `brickAbove` (the indices in `out` of the brick it stands on and the brick resting on it, -1 for none; see `studMode`, which can ask for every stud instead), with identity `rot` and unit `scale`, so a stud mesh modelled at world size with its base at the origin spawns straight onto it; the bounds columns are reset to zero. `islandsAttr` optionally writes a DETAIL u32 on `out` counting the pieces the build falls into when only stud CLUTCH holds it — a brick is joined to the bricks sitting on its top face where their footprints overlap, and side contact does not count, so a value above 1 is a build that comes apart when lifted. HALO: none. A brick spans cells, so cooked over part of the boxes it cuts bricks at the part's edge; this belongs on an unbounded level or before a split. Not GPU-eligible: the packing is sequential by construction. The occupancy grid is dense over the boxes' joint extent and refused past 16.7 million cells.",
+    "Reads axis-aligned BOXES on a stud lattice — one per point, its corners in two point attributes, an extent in the point's OWN frame as every box node reads boundsMin/boundsMax (world = P + rot * (scale * corner)); the lattice is axis-aligned, so a point must carry the identity rotation and scale [1, 1, 1], and one that does not is refused naming it — and writes the BRICKS that build them: one point per brick, from a stated catalogue of footprints, that together fill exactly the lattice cells the boxes cover. The lattice is `pitch` in world units per cell (a stud is 1 across, a plate 0.4 tall, by default), anchored at `origin`; x and z count studs and y counts plates. Every corner must land on the lattice, and one that does not is refused naming the point and the corner, because a box half a stud off is a box the graph upstream built on a different lattice. Boxes may overlap: their cells are unioned, and a cell two boxes claim belongs to the one with the lower point IDENTITY (stored position bits plus `seed`), never the lower array index, so shuffling the input changes nothing — unless two overlapping boxes share both P and `seed`, which identity cannot tell apart, and then the earlier one in the input wins. WHAT A BRICK MAY NOT CROSS is `groupBy`: cells whose boxes differ in any listed attribute are different material and never share a brick, so a wall's colour changes exactly where its boxes' colour does. Each brick carries every point attribute of the box that owns its anchor cell. THE PACKING IS A SCANLINE GREEDY, course by course from the bottom and within a course in z then x. The first unfilled cell of a scan is always the minimum corner of the brick that covers it, so the scan is complete without backtracking; the choice there is WHICH catalogue entry, either way round. HEIGHT COMES FIRST: the tallest entry that fits is the course, so a wall is laid in full bricks and plates appear only where the space is shorter than a brick. Among footprints of that height the score is the footprint in studs less `stagger` for every stud of joint in the brick's bottom course that sits directly on a seam in the course below, counted only on the joints the placement decides — where the cell across is the same material and not yet filled — a running bond, the reason real walls hold together, charged only where a different brick could have avoided it — PLUS `bond` for every two separate pieces the placement joins into one, which is what keeps a floor or a roof laid over an empty room from coming out as loose plates (pieces as stud clutch holds them; see `islandsAttr`). AHEAD OF THAT SCORE, WITHIN THE HEIGHT, COMES WHAT HOLDS. A brick is gripped only through its top and bottom faces, so a placement with no brick under its footprint and no cell to be filled over it — a plate in the middle of a one-plate floor, over an empty room and under another — is loose in every build order. A placement that would leave a cell beside it with no HELD placement left to cover it STRANDS the cell: whatever brick covered it would be loose too. So each placement is charged the loose bricks it commits the build to — one if it is held by nothing, plus one for every cell it strands — and the fewest wins, then a held placement over one held by nothing, then the score. Both charges only ever decide where a course has cells with nothing under or over them; a wall, or anything standing on what is below it, packs by the score alone. Ties go to the larger footprint, then the earlier catalogue entry, then the entry as listed rather than turned. If nothing fits — a catalogue with no 1x1 plate meeting a one-plate gap — the cell is refused by name rather than left empty, so the output always covers the input exactly. THE HOLD SEARCH answers what that one-placement look cannot see: a trap set two or more placements back, an early brick that took the grip a later cell needed. Wherever a course comes out with a brick held by nothing, that course is laid again with each REGION around such a brick — the course's cells of that material that were unfilled when the course began, joined side to side — packed by an EXACT search for a packing in which every brick is held: depth first over the held placements alone, first in scan order and then from the cell the fewest of them cover, each cell's placements tried by the same score, a placement dropped the moment it leaves a cell of the region with no held placement over it, and a failure going straight back to the latest placement to blame for it. Its first answer is the greedy's own choice wherever that choice holds. It is bounded in STEPS of work, never in time, so the result is the same on every machine and under any load: " + String(holdBudget.region) + " per region and " + String(holdBudget.cook) + " per cook, a few milliseconds for the regions a generated house has and some 30 ms at the bound. Where the search in scan order runs out, three more answers are asked, each exact and each bounded in steps of its own (" + String(holdBudget.parity) + " and " + String(holdBudget.cuts) + " per region, " + String(holdBudget.settle) + " per cook, for the first and last; " + String(holdBudget.probe) + " per region and " + String(holdBudget.probeCook) + " per cook, and at most " + String(holdBudget.probeCells) + " cells, for the second): first two proofs that no held packing exists, before the search from the fewest goes on — a PARITY proof, if no set of held placements covers every cell of the region an odd number of times, which is what rules out a one-plate floor walled round whose middle every plate reaches only by an even length, a 21 x 21 slab among them, and PROBES, cases on one cell: each held placement over it is taken in turn with every placement it forces (a cell left exactly one held placement clear of those taken), and if each comes to a cell nothing can cover, or to two forced placements that overlap, no packing exists, which is what rules out a floor over posts too far apart, where a cell only a baseplate reaches leaves another such cell nothing — and, where the search from the fewest runs out as well, a packing by STRAIGHT CUTS — the region's bounding box cut across, again and again, into rectangles each empty or one held catalogue entry — which finds the baseplate-and-strips packings of a big walled slab that a search laying one brick at a time from a corner does not reach. A region proven to have no held packing (a cell no held brick can reach is the usual proof, the parity count and the probes the next most common), one nothing answered within its budget, and one that mixes brick heights are laid by the greedy as before — byte for byte in a course where no region was solved; where one was, its bricks can join pieces the greedy weighs elsewhere in the course. The course is laid again only from the first cell of its new regions, every brick before it kept, and a brick after it is weighed again only where something the greedy reads there — the course's cells round it, the pieces under it — can differ from the laying before; everywhere else the earlier choice stands, so the course comes out brick for brick as laying all of it again would. A course with no brick held by nothing is never searched, so it packs exactly as the greedy alone does. Where the search ran on a course as laid (the regions the ground repair below asks for are its own, and counted there), `out` carries a DETAIL u32 `holdSearch` of four counts — regions searched, solved, proven to have no held packing, and left to the greedy unproven (budget spent, or heights mixed) — and where it never ran there is no such attribute. A BRICK CAN BE HELD AND STILL HANG FROM NOTHING: bricks that hold each other across two or more courses — a floor's edge row under a roof's edge column — with none of them standing on anything that reaches the bottom course, which no look at one course sees. So the finished build is asked what brickConnectivity asks for step -1: the pieces stud clutch makes, and whether each holds a brick of the bottom course. A piece that does not is FLOATING, and is repaired course by course, its lowest first: the build is taken back to that course and laid again from it, with the regions round the piece's bricks there packed by the hold search under one more demand — a brick over a cell of the piece must also cover a cell standing on a brick of a piece that already reaches the bottom course — and every course above laid on that as usual. A repair is kept only if the build it makes, asked again, floats fewer bricks; otherwise the build is put back exactly as it was. A course where a brick of the piece lies in a region the hold search came back from without a held packing is not asked (a firm packing is a held one). Each course asked costs every cell from it up, against a budget of " + String(holdBudget.ground) + " cells per cook, never time. Where something floated, `out` carries a DETAIL u32 `groundRepair` of six counts — floating pieces and their bricks before the repair, the same after it (as asked of the finished build, never assumed), courses asked, and repairs kept — and where nothing floated there is no such attribute and the build is packed exactly as without the repair. OUTPUT `out`: one point per brick in scan order. P is the brick's centre, `rot` a quarter turn about y when the entry was placed turned (identity otherwise), and `scale` its full extents in its OWN frame — w and d studs and h plates as listed, in world units — so a unit box copied onto these points draws every brick in place. `boundsMin`/`boundsMax` are the UNIT box, [-0.5, -0.5, -0.5] to [0.5, 0.5, 0.5]: the brick's box in its own frame, world = P + rot * (scale * x) with `scale` its extents, which is how brickConnectivity and every box node read it. So the box names on a brick describe the unit box, and a WORLD fact about a brick comes from its transform: the bottom of a brick turned only about y is P.y - 0.5 * scale.y, sub(component(position(), 1), mul(0.5, component(attribute(\"scale\", 3), 1))). `brick` (string) is the entry as `WxDxH`, ready to be spawnInstances' `assetAttr`, and `brickIndex` (i32) is its position in the catalogue — `bricks` followed by `extraBricks`. OUTPUT `studs`: one point per stud left SHOWING — on a brick's top where the lattice cell above is empty — at the stud's base centre on the brick's top face, carrying the brick's attributes and its `brick`/`brickIndex`, plus `brickId` and `brickAbove` (the indices in `out` of the brick it stands on and the brick resting on it, -1 for none; see `studMode`, which can ask for every stud instead), with identity `rot` and unit `scale`, so a stud mesh modelled at world size with its base at the origin spawns straight onto it; the bounds columns are reset to the zero box (at P). `islandsAttr` optionally writes a DETAIL u32 on `out` counting the pieces the build falls into when only stud CLUTCH holds it — a brick is joined to the bricks sitting on its top face where their footprints overlap, and side contact does not count, so a value above 1 is a build that comes apart when lifted. HALO: none. A brick spans cells, so cooked over part of the boxes it cuts bricks at the part's edge; this belongs on an unbounded level or before a split. Not GPU-eligible: the packing is sequential by construction. The occupancy grid is dense over the boxes' joint extent and refused past 16.7 million cells.",
   inputs: [{ name: "in", kind: "geometry" }],
   outputs: [
     { name: "out", kind: "geometry" },
@@ -215,13 +215,13 @@ export const packBricks = standardNode<PackBricksParams, PackBricksInputs, PackB
       type: "string",
       default: "boundsMin",
       description:
-        "POINT attribute (f32 or i32, tuple size 3) holding each box's minimum corner in WORLD units — the absolute corner, not an offset from P, which is what setBounds writes. Converted to lattice cells through `pitch` and `origin` and refused, naming the point, unless every component lands on a lattice plane.",
+        "POINT attribute (f32 or i32, tuple size 3) holding each box's minimum corner in the point's OWN frame, as every box node reads boundsMin: the world corner is P + this (the point must carry the identity rotation and scale [1, 1, 1]). Converted to lattice cells through `pitch` and `origin` and refused, naming the point, unless every component lands on a lattice plane.",
     },
     maxAttr: {
       type: "string",
       default: "boundsMax",
       description:
-        "POINT attribute (f32 or i32, tuple size 3) holding each box's maximum corner in world units, on the same terms as `minAttr`. A box with a maximum below its minimum on any axis is refused; one with zero extent on an axis covers no cells and is skipped.",
+        "POINT attribute (f32 or i32, tuple size 3) holding each box's maximum corner in the point's own frame, on the same terms as `minAttr`. A box with a maximum below its minimum on any axis is refused; one with zero extent on an axis covers no cells and is skipped.",
     },
     pitch: {
       type: "vec3",
@@ -326,6 +326,7 @@ export const packBricks = standardNode<PackBricksParams, PackBricksInputs, PackB
     const n = pts.count;
     const loCol = cornerColumn(NODE, src, minAttr, "minAttr");
     const hiCol = cornerColumn(NODE, src, maxAttr, "maxAttr");
+    const frames = readFrames(NODE, src);
     const groupCols = groupBy.map((name) => {
       const col = pts.get(name);
       if (col === undefined) {
@@ -343,13 +344,24 @@ export const packBricks = standardNode<PackBricksParams, PackBricksInputs, PackB
     for (let i = 0; i < n; i++) {
       let empty = false;
       for (let c = 0; c < 3; c++) {
-        const a = toCell(NODE, loCol.get(i, c), c, i, minAttr, pitch, origin);
-        const b = toCell(NODE, hiCol.get(i, c), c, i, maxAttr, pitch, origin);
-        if (b < a) {
+        if (hiCol.get(i, c) < loCol.get(i, c)) {
           throw new Error(
             `${NODE}: point ${i} has ${maxAttr}.${"xyz"[c]} below ${minAttr}.${"xyz"[c]} (${hiCol.get(i, c)} < ${loCol.get(i, c)}); a box's maximum corner must not be under its minimum — check which column is which`,
           );
         }
+      }
+      // A box of no volume covers no cells, wherever it sits: skipped
+      // before its frame or its lattice is asked about, so the zero box
+      // every point carries by default (now at its P, not at the world
+      // origin) is not refused for a P off the lattice.
+      if ([0, 1, 2].some((c) => hiCol.get(i, c) === loCol.get(i, c))) continue;
+      requireUnitFrame(frames, i);
+      for (let c = 0; c < 3; c++) {
+        // The world corner: P + the local corner, in f64 (identity rot and
+        // unit scale checked above). toCell's SNAP absorbs the f32 residue.
+        const p = frames.P[i * frames.pStride + c] as number;
+        const a = toCell(NODE, p + loCol.get(i, c), c, i, minAttr, pitch, origin);
+        const b = toCell(NODE, p + hiCol.get(i, c), c, i, maxAttr, pitch, origin);
         if (b === a) empty = true;
         cellLo[i * 3 + c] = a;
         cellHi[i * 3 + c] = b;
@@ -2238,8 +2250,9 @@ export const packBricks = standardNode<PackBricksParams, PackBricksInputs, PackB
         for (let c = 0; c < 3; c++) {
           const a = origin[c] + (lo[c] as number) * pitch[c];
           const b = origin[c] + ((lo[c] as number) + (ext[c] as number)) * pitch[c];
-          bMin[id * 3 + c] = a;
-          bMax[id * 3 + c] = b;
+          // The brick's box in its own frame: the unit box, scale its extents.
+          bMin[id * 3 + c] = -0.5;
+          bMax[id * 3 + c] = 0.5;
           P[id * 3 + c] = 0.5 * (a + b);
         }
         // Own-frame extents: as listed, whichever way it was placed.
@@ -2321,7 +2334,7 @@ export const brickConnectivity = standardNode<
   type: CONNECT,
   category: "attribute",
   description:
-    "Reads BRICKS on a stud lattice — one per point, its world corners in two point attributes, as packBricks writes them — and says how they hold together: which clutch-connected piece each brick belongs to, and the build STEP at which it can be placed. Two bricks are joined when one sits directly on the other's top face with overlapping footprints, which is what a stud gripping the brick above does; side-by-side contact joins nothing. `island` numbers the pieces 0, 1, 2…, ordered by their lowest point IDENTITY (stored position bits plus `seed`), so it does not move when the input is shuffled. `step` is an ORDER YOU COULD BUILD IN, bottom up: the steps are the distinct bottom courses of the build in rising order, and at each one a brick is placed if it stands on the build's lowest course (the table) or clutches a brick already placed. A brick that hangs UNDER something — a plate held only by the floor laid on top of it — cannot be placed in its own course, because nothing is there to grip yet; it is placed in the step of the first brick above it that is, along with anything hanging under it in turn. So every brick, when it is placed, is attached to something already standing. A brick no order can attach — in a piece with no brick on the lowest course, which is a piece held by nothing — gets `step` -1, and its `island` is still numbered: the count of -1 steps is how many bricks a build would drop. Bricks must not overlap (two bricks claiming one cell are refused, naming both points) and every corner must land on the lattice, exactly as packBricks requires; a zero-volume box is not a brick and gets -1 for both. OUTPUT `out` is the input with two i32 point attributes added, `islandAttr` and `stepAttr`, the number of steps as a DETAIL u32 (`stepCountAttr`, the range a build-step slider runs over: steps 0 to stepCount - 1), and optionally the island count as a DETAIL u32; no point is moved, added or reordered, so a filterByExpression on `step` downstream shows the build as it stood after any step. INPUT `studs` (optional) takes packBricks' `studs` output — best with `studMode: 'all'` — whose `brickId` and `brickAbove` columns are indices into the bricks on `in`, so `in` must be that same packBricks' `out` with nothing dropped or reordered (an index past the end is refused, naming the stud). Wired, OUTPUT `studs` is those studs with two i32 point attributes added: `stepAttr`, the step of the brick the stud stands on (-1 when that brick is never attached), and `stepAboveAttr`, the step of the brick resting on it — -1 when there is none OR when that brick is never attached, both of which mean no partial build ever covers the stud — plus the same `stepCountAttr`. So 'stud is showing after step t' is `step` >= 0 and `step` <= t and (`stepAbove` < 0 or `stepAbove` > t), with no join downstream. Unwired, `studs` is an empty collection and `out` is unaffected. HALO: none — a piece is a fact about the whole build. Not GPU-eligible.",
+    "Reads BRICKS on a stud lattice — one per point, its box in two point attributes read through the point's transform (world = P + rot * (scale * corner)), as packBricks writes them: P the brick's centre, a quarter turn about y where it was placed turned, scale its extents, the unit box. The rotation must be a whole number of quarter turns about y, refused naming the point otherwise, and each brick's world box is the axis-aligned box of its transformed corners — and says how they hold together: which clutch-connected piece each brick belongs to, and the build STEP at which it can be placed. Two bricks are joined when one sits directly on the other's top face with overlapping footprints, which is what a stud gripping the brick above does; side-by-side contact joins nothing. `island` numbers the pieces 0, 1, 2…, ordered by their lowest point IDENTITY (stored position bits plus `seed`), so it does not move when the input is shuffled. `step` is an ORDER YOU COULD BUILD IN, bottom up: the steps are the distinct bottom courses of the build in rising order, and at each one a brick is placed if it stands on the build's lowest course (the table) or clutches a brick already placed. A brick that hangs UNDER something — a plate held only by the floor laid on top of it — cannot be placed in its own course, because nothing is there to grip yet; it is placed in the step of the first brick above it that is, along with anything hanging under it in turn. So every brick, when it is placed, is attached to something already standing. A brick no order can attach — in a piece with no brick on the lowest course, which is a piece held by nothing — gets `step` -1, and its `island` is still numbered: the count of -1 steps is how many bricks a build would drop. Bricks must not overlap (two bricks claiming one cell are refused, naming both points) and every corner must land on the lattice, exactly as packBricks requires; a zero-volume box is not a brick and gets -1 for both. OUTPUT `out` is the input with two i32 point attributes added, `islandAttr` and `stepAttr`, the number of steps as a DETAIL u32 (`stepCountAttr`, the range a build-step slider runs over: steps 0 to stepCount - 1), and optionally the island count as a DETAIL u32; no point is moved, added or reordered, so a filterByExpression on `step` downstream shows the build as it stood after any step. INPUT `studs` (optional) takes packBricks' `studs` output — best with `studMode: 'all'` — whose `brickId` and `brickAbove` columns are indices into the bricks on `in`, so `in` must be that same packBricks' `out` with nothing dropped or reordered (an index past the end is refused, naming the stud). Wired, OUTPUT `studs` is those studs with two i32 point attributes added: `stepAttr`, the step of the brick the stud stands on (-1 when that brick is never attached), and `stepAboveAttr`, the step of the brick resting on it — -1 when there is none OR when that brick is never attached, both of which mean no partial build ever covers the stud — plus the same `stepCountAttr`. So 'stud is showing after step t' is `step` >= 0 and `step` <= t and (`stepAbove` < 0 or `stepAbove` > t), with no join downstream. Unwired, `studs` is an empty collection and `out` is unaffected. HALO: none — a piece is a fact about the whole build. Not GPU-eligible.",
   inputs: [
     { name: "in", kind: "geometry" },
     { name: "studs", kind: "geometry", optional: true },
@@ -2335,13 +2348,13 @@ export const brickConnectivity = standardNode<
       type: "string",
       default: "boundsMin",
       description:
-        "POINT attribute (f32 or i32, tuple size 3) holding each brick's minimum corner in WORLD units, as packBricks writes it. Refused, naming the point, unless every component lands on the lattice.",
+        "POINT attribute (f32 or i32, tuple size 3) holding each brick's minimum corner in the point's OWN frame, as packBricks writes it (the unit box) and every box node reads boundsMin; mapped through P, rot and scale to its world box. Refused, naming the point, unless every world corner lands on the lattice.",
     },
     maxAttr: {
       type: "string",
       default: "boundsMax",
       description:
-        "POINT attribute (f32 or i32, tuple size 3) holding each brick's maximum corner in world units, on the same terms as `minAttr`.",
+        "POINT attribute (f32 or i32, tuple size 3) holding each brick's maximum corner in the point's own frame, on the same terms as `minAttr`.",
     },
     pitch: {
       type: "vec3",
@@ -2476,6 +2489,7 @@ export const brickConnectivity = standardNode<
     }
     const loCol = cornerColumn(CONNECT, src, minAttr, "minAttr");
     const hiCol = cornerColumn(CONNECT, src, maxAttr, "maxAttr");
+    const frames = readFrames(CONNECT, src);
     const n = src.attrs.point.count;
     const studs =
       studSrc === undefined ? undefined : readStudIndices(studSrc, n, { stepAttr, stepAboveAttr, stepCountAttr });
@@ -2486,16 +2500,24 @@ export const brickConnectivity = standardNode<
     const solid = new Uint8Array(n);
     const gMin = [Infinity, Infinity, Infinity];
     const gMax = [-Infinity, -Infinity, -Infinity];
+    const wLo = [0, 0, 0];
+    const wHi = [0, 0, 0];
     for (let i = 0; i < n; i++) {
       let empty = false;
       for (let c = 0; c < 3; c++) {
-        const a = toCell(CONNECT, loCol.get(i, c), c, i, minAttr, pitch, origin);
-        const b = toCell(CONNECT, hiCol.get(i, c), c, i, maxAttr, pitch, origin);
-        if (b < a) {
+        if (hiCol.get(i, c) < loCol.get(i, c)) {
           throw new Error(
             `${CONNECT}: point ${i} has ${maxAttr}.${"xyz"[c]} below ${minAttr}.${"xyz"[c]} (${hiCol.get(i, c)} < ${loCol.get(i, c)}); a brick's maximum corner must not be under its minimum — check which column is which`,
           );
         }
+      }
+      // A box of no volume is no brick, wherever it sits (packBricks' rule):
+      // skipped before its frame or its lattice is asked about.
+      if ([0, 1, 2].some((c) => hiCol.get(i, c) === loCol.get(i, c))) continue;
+      worldBox(frames, i, loCol, hiCol, wLo, wHi);
+      for (let c = 0; c < 3; c++) {
+        const a = toCell(CONNECT, wLo[c] as number, c, i, minAttr, pitch, origin);
+        const b = toCell(CONNECT, wHi[c] as number, c, i, maxAttr, pitch, origin);
         if (b === a) empty = true;
         lo[i * 3 + c] = a;
         hi[i * 3 + c] = b;
@@ -2843,18 +2865,126 @@ function readCatalogue(flat: readonly number[], extra: readonly number[]): Candi
   return out;
 }
 
+/** A cloud's point transforms, read once: P (with its stride), and rot and scale where present. */
+interface Frames {
+  readonly who: string;
+  readonly P: ArrayLike<number>;
+  readonly pStride: number;
+  readonly rot: ArrayLike<number> | undefined;
+  readonly scale: ArrayLike<number> | undefined;
+}
+
+/**
+ * The transform columns a box is read through (world = P + rot * (scale *
+ * corner)). A missing rot is the identity and a missing scale 1, as
+ * spawnInstances reads them; a column of the wrong shape is refused.
+ */
+function readFrames(who: string, src: Geometry): Frames {
+  const pts = src.attrs.point;
+  const P = pts.get("P");
+  if (P === undefined || P.type === "string" || P.tupleSize < 3) {
+    throw new Error(
+      `${who}: a box is an extent in its point's own frame (world = P + rot * (scale * corner)), so every box needs its point's position, but the input has ${P === undefined ? "no P attribute" : `P as ${P.type} tupleSize ${P.tupleSize}`}`,
+    );
+  }
+  const rot = pts.get("rot");
+  if (rot !== undefined && (rot.type !== "f32" || rot.tupleSize !== 4)) {
+    throw new Error(`${who}: the standard point attribute "rot" is ${rot.type} tupleSize ${rot.tupleSize}, but a rotation is an f32 tuple-4 quaternion (x, y, z, w); rename that column`);
+  }
+  const scale = pts.get("scale");
+  if (scale !== undefined && (scale.type !== "f32" || scale.tupleSize !== 3)) {
+    throw new Error(`${who}: the standard point attribute "scale" is ${scale.type} tupleSize ${scale.tupleSize}, but a scale is f32 tuple 3; rename that column`);
+  }
+  return { who, P: P.data as ArrayLike<number>, pStride: P.tupleSize, rot: rot?.data as ArrayLike<number> | undefined, scale: scale?.data as ArrayLike<number> | undefined };
+}
+
+/** Point i's quaternion normalized in f64 (a zero one is the identity), refused when not finite. */
+function unitQuat(f: Frames, i: number): [number, number, number, number] {
+  if (f.rot === undefined) return [0, 0, 0, 1];
+  const q = [f.rot[i * 4], f.rot[i * 4 + 1], f.rot[i * 4 + 2], f.rot[i * 4 + 3]] as [number, number, number, number];
+  const len = Math.hypot(...q);
+  if (!Number.isFinite(len)) throw new Error(`${f.who}: point ${i} has a non-finite "rot" (${q.join(", ")})`);
+  return len === 0 ? [0, 0, 0, 1] : [q[0] / len, q[1] / len, q[2] / len, q[3] / len];
+}
+
+/**
+ * packBricks' frame rule: the lattice is axis-aligned, so a box must sit in
+ * a frame that is a pure translation — rot normalizing to exactly the
+ * identity (a zero quaternion is the identity), scale exactly [1, 1, 1] —
+ * and one that is not is refused naming the point. A rotated or scaled
+ * lattice is a separate feature.
+ */
+function requireUnitFrame(f: Frames, i: number): void {
+  const [qx, qy, qz, qw] = unitQuat(f, i);
+  const s = f.scale === undefined ? [1, 1, 1] : [f.scale[i * 3], f.scale[i * 3 + 1], f.scale[i * 3 + 2]];
+  const p = [f.P[i * f.pStride], f.P[i * f.pStride + 1], f.P[i * f.pStride + 2]];
+  if (!p.every((v) => Number.isFinite(v))) throw new Error(`${f.who}: point ${i} has a non-finite P (${p.join(", ")})`);
+  if (qx === 0 && qy === 0 && qz === 0 && qw === 1 && s[0] === 1 && s[1] === 1 && s[2] === 1) return;
+  const rot = f.rot === undefined ? [0, 0, 0, 1] : [f.rot[i * 4], f.rot[i * 4 + 1], f.rot[i * 4 + 2], f.rot[i * 4 + 3]];
+  throw new Error(
+    `${f.who}: point ${i} has rot [${rot.join(", ")}] and scale [${s.join(", ")}]; its box is read in its own frame (world = P + rot * (scale * corner)) and packed on an axis-aligned lattice, so it needs the identity rotation and scale [1, 1, 1] — a rotated or scaled lattice is not supported. Pack the cells before turning them and turn the bricks after (transformPoints), or bake a scale into the box first (transformBox scale attribute("scale", 3), then setAttribute scale [1, 1, 1]).`,
+  );
+}
+
+/** How near a rotation-matrix entry must be to 0 or +-1 to read as a quarter turn (f32 SQRT1_2 is 3e-8 off). */
+const QUARTER_TOL = 1e-6;
+
+/**
+ * Point i's WORLD box: the axis-aligned box of its eight corners mapped
+ * through P, rot and scale, in f64. The rotation must be a whole number of
+ * quarter turns about y — what packBricks writes, f32 SQRT1_2 included,
+ * normalized first — and is refused naming the point otherwise; the
+ * quarter turn's residue (about 1e-16 of the extents once normalized) is
+ * far inside toCell's SNAP.
+ */
+function worldBox(f: Frames, i: number, lo: Attribute, hi: Attribute, outLo: number[], outHi: number[]): void {
+  const [x, y, z, w] = unitQuat(f, i);
+  // The rotation's columns (where local x, y, z land).
+  const R = [
+    [1 - 2 * (y * y + z * z), 2 * (x * y + z * w), 2 * (x * z - y * w)],
+    [2 * (x * y - z * w), 1 - 2 * (x * x + z * z), 2 * (y * z + x * w)],
+    [2 * (x * z + y * w), 2 * (y * z - x * w), 1 - 2 * (x * x + y * y)],
+  ];
+  const near = (v: number, t: number) => Math.abs(v - t) <= QUARTER_TOL;
+  const unitish = (v: number) => near(v, 0) || near(v, 1) || near(v, -1);
+  const aboutY = near(R[1][1], 1) && near(R[0][1], 0) && near(R[1][0], 0) && near(R[2][1], 0) && near(R[1][2], 0);
+  if (!aboutY || !R.every((col) => col.every(unitish))) {
+    const rot = f.rot === undefined ? [0, 0, 0, 1] : [f.rot[i * 4], f.rot[i * 4 + 1], f.rot[i * 4 + 2], f.rot[i * 4 + 3]];
+    throw new Error(
+      `${f.who}: point ${i} has rot [${rot.join(", ")}], which is not a whole number of quarter turns about y; a brick on a stud lattice is turned only that way (packBricks writes the identity or a quarter turn), so its world box would leave the lattice`,
+    );
+  }
+  const s = f.scale === undefined ? [1, 1, 1] : [f.scale[i * 3], f.scale[i * 3 + 1], f.scale[i * 3 + 2]];
+  const p = [f.P[i * f.pStride], f.P[i * f.pStride + 1], f.P[i * f.pStride + 2]];
+  if (![...s, ...p].every((v) => Number.isFinite(v))) {
+    throw new Error(`${f.who}: point ${i} has a non-finite P (${p.join(", ")}) or scale (${s.join(", ")})`);
+  }
+  for (let c = 0; c < 3; c++) {
+    outLo[c] = Infinity;
+    outHi[c] = -Infinity;
+  }
+  for (let k = 0; k < 8; k++) {
+    const v = [0, 1, 2].map((a) => ((k >> a) & 1 ? hi.get(i, a) : lo.get(i, a)) * (s[a] as number));
+    for (let c = 0; c < 3; c++) {
+      const wc = (p[c] as number) + (R[0][c] as number) * (v[0] as number) + (R[1][c] as number) * (v[1] as number) + (R[2][c] as number) * (v[2] as number);
+      if (wc < (outLo[c] as number)) outLo[c] = wc;
+      if (wc > (outHi[c] as number)) outHi[c] = wc;
+    }
+  }
+}
+
 function cornerColumn(who: string, src: Geometry, name: string, param: string): Attribute {
   const col = src.attrs.point.get(name);
   if (col === undefined) throw attributeNotFound(src, "point", name, { prefix: `${who}: `, param });
   if ((col.type !== "f32" && col.type !== "i32") || col.tupleSize !== 3) {
     throw new Error(
-      `${who}: param "${param}" names "${name}", which is ${col.type} with tuple size ${col.tupleSize}; a corner is f32 or i32 with tuple size 3, in world units`,
+      `${who}: param "${param}" names "${name}", which is ${col.type} with tuple size ${col.tupleSize}; a corner is f32 or i32 with tuple size 3, in the point's own frame`,
     );
   }
   return col;
 }
 
-/** World coordinate to lattice plane index, refused off the lattice. */
+/** World coordinate (P plus the local corner, transformed) to lattice plane index, refused off the lattice. */
 function toCell(
   who: string,
   v: number,

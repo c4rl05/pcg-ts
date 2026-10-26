@@ -254,9 +254,13 @@ const COUNT = 97;
 // "longest" over "xz" for their hand-written select(ge(box("sx"),
 // box("sz")), 0, 2), so reverse is 30 expansions of 93 names, 30
 // evaluated, 29 compiled; the reverse floors sit just under that.
+// Then the brick house's `vary` stopped reading box("y0") on BRICKS, whose
+// box is the unit box once boxes are local to their points (it reads the
+// world bottom from P and scale), so reverse is 29 expansions of 92
+// names, 29 evaluated, 28 compiled; the reverse floors sit just under that.
 const FORWARD_FROZEN_COUNTS = { rewritten: 12, names: 80, evaluated: 12, compiled: 12 };
 const FORWARD_COUNTS = { rewritten: 13, names: 89, evaluated: 13, compiled: 13 };
-const REVERSE_COUNTS = { expanded: 29, names: 92, evaluated: 29, compiled: 28 };
+const REVERSE_COUNTS = { expanded: 28, names: 91, evaluated: 28, compiled: 27 };
 
 function ctxFor(spec: FieldSpec): { ctx: EvalContext; layout: FieldKernelLayout } {
   const geo = createPointCloud(COUNT);
