@@ -44,6 +44,46 @@ waiting for anything. Its body stays because the analysis under it is
 what the outcome tested — several of these scored badly, and a survey
 that guessed wrong is worth more to the next survey than a deleted one.
 
+### A world-space box name — found 2026-10-26
+
+A point's box is now an extent in its own frame (world = P + rot *
+(scale * x)), so every box name is local: `box("center")` is the centre
+relative to P, not a world position. A field that wants the WORLD centre
+needs P + rotate(rot, scale * center), and the field grammar has no
+quaternion rotate. Adding `box("worldCenter")` (and the world corners
+with it) means a rotate fn in the grammar, its WGSL lowering, and a
+parity tolerance for it, since the rotation rounds in f32 on the device.
+"Quaternion field functions" under Stretch was refuted for a different
+caller (child rotations in a growth system); this one would reopen it on
+its own evidence. The CPU answer today is `pivotBox` (default pivot, the
+box's centre) and then `position()`. Waiting for a caller that needs it
+inside one field rather than one node later.
+
+### A rotated brick lattice — found 2026-10-26
+
+`packBricks` reads each box as P + corner and refuses an input cell with
+a rotation other than the identity or a scale other than [1, 1, 1],
+naming the point, because its lattice is the world's: `pitch` and
+`origin` lay one grid for every cell. A rotated building can be built in
+bricks only by packing it unrotated and turning the bricks afterwards.
+Packing a rotated cell directly needs the lattice in the cell's frame,
+and then cells of different frames can no longer share one lattice, so
+the overlap union and the `bond` scoring between them need a rule.
+`brickConnectivity` already reads quarter turns about y. Waiting for a
+graph that needs bricks off the world axes.
+
+### `transformBox` `pivotIn` "union" across frames — found 2026-10-26
+
+"union" pools the corners of every chosen cell into one bounding box.
+Corners in different frames have no common bounding box, so the chosen
+cells must share one transform (bit-identical P, rot and scale, as every
+piece of one grammar root does) and a mix is refused naming two cells
+that differ. Lifting that needs a common frame: either one named by the
+caller (a reference point) or the world, with the union taken over each
+box's world corners and mapped back into every cell's frame — exact only
+under quarter turns and dyadic scales. Waiting for a caller that unions
+pieces of different roots.
+
 ### `smoothNormals`' two f32 params refuse a field — found 2026-09-27
 
 The node (8103b85) shipped after the sweep that made every per-element

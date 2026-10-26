@@ -12,6 +12,9 @@ export interface StandardPointAttr {
 /**
  * The standard point attributes (the PCG "point with attributes"):
  * transform (P/rot/scale), density, bounds, color, and per-point seed.
+ * The bounds (`boundsMin`/`boundsMax`) are the point's box: an
+ * axis-aligned extent in the point's own frame, world =
+ * P + rot * (scale * x), so the default zero box sits at P.
  */
 export const STANDARD_POINT_ATTRS: readonly StandardPointAttr[] = [
   { name: "P", type: "f32", tupleSize: 3, defaultValue: [0, 0, 0] },

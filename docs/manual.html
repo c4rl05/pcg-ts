@@ -573,7 +573,7 @@ console.<span class="n">log</span>(result.stats);</code></pre></div>
         <tr><td><code>rot</code></td><td>f32</td><td>4</td><td>Orientation quaternion, xyzw order.</td></tr>
         <tr><td><code>scale</code></td><td>f32</td><td>3</td><td>Per-axis scale.</td></tr>
         <tr><td><code>density</code></td><td>f32</td><td>1</td><td>The channel the density filters read.</td></tr>
-        <tr><td><code>boundsMin</code> / <code>boundsMax</code></td><td>f32</td><td>3</td><td>Per-point extents, for bounds filters.</td></tr>
+        <tr><td><code>boundsMin</code> / <code>boundsMax</code></td><td>f32</td><td>3</td><td>The point's box: an axis-aligned extent in the point's own frame (world = P + rot × (scale × corner)), so <code>[0, 0, 0]</code> is the point itself. A fresh point carries the zero box at its P. The box nodes cut and read it, and <code>copyToPoints</code> / <code>spawnInstances</code> place a mesh by the same extent.</td></tr>
         <tr><td><code>color</code></td><td>f32</td><td>4</td><td>RGBA.</td></tr>
         <tr><td><code>seed</code></td><td>u32</td><td>1</td><td>The point's own seed — its slice of the hash chain.</td></tr>
       </tbody>

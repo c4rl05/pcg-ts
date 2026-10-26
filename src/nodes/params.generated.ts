@@ -3183,13 +3183,18 @@ export interface PathCoverageParams {
    * boxSize * scale componentwise, so the default [1, 1, 1] means 'the points carry unit
    * cubes and `scale` IS the size', which is the common case. As a FIELD it is resolved ON
    * THE BOXES CLOUD, not on the path, so attribute("...") inside it reads the boxes' own
-   * columns: a cloud carrying its extents in the standard bounds attributes is
-   * subtract(attribute("boundsMax"), attribute("boundsMin")). GETTING THIS WRONG IS SILENT
-   * IN BOTH DIRECTIONS: scaling twice inflates every box and reports a tunnel over the whole
-   * path, forgetting `scale` shrinks them and reports no cover anywhere, and each produces a
-   * run that finishes cleanly with a wrong number in it. Boxes are centred on their points;
-   * a negative size is read as its magnitude, since a box of size -2 is the same set of
-   * points as one of size 2.
+   * columns: a cloud carrying its extents in the standard bounds attributes is box("size")
+   * (boundsMax - boundsMin, an extent in the point's own frame, which `scale` then
+   * multiplies as here). GETTING THIS WRONG IS SILENT IN BOTH DIRECTIONS: scaling twice
+   * inflates every box and reports a tunnel over the whole path, forgetting `scale` shrinks
+   * them and reports no cover anywhere, and each produces a run that finishes cleanly with a
+   * wrong number in it. Boxes are CENTRED ON THEIR POINTS, so box("size") is the right
+   * extent only for a box centred on P: a point's bounds are an extent about P that need not
+   * be centred (setBounds "baseCenter" stands the box on P, and a grammar's pieces keep
+   * their root's P), and such a box is tested displaced by its centre offset. Run pivotBox
+   * (default pivot, the box's centre) first, which moves P to the box's centre and keeps the
+   * box where it is. A negative size is read as its magnitude, since a box of size -2 is the
+   * same set of points as one of size 2.
    *
    * - Accepts a field.
    *

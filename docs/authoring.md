@@ -787,6 +787,43 @@ as the fix; off the point domain it adds that `setBounds` writes boxes on
 points, so land the field on points or promote both corners with
 `promoteAttribute`.
 
+That is the ONE meaning of a point's box, and every node that touches one
+reads it that way: `splitBox`, `shellSplit`, `placeBox`, `offsetBox`,
+`transformBox`, `applyRules`, `boxContact`, `boxesToMesh`, `packBricks`,
+`brickConnectivity`, `pivotBox` and `setBounds`, and the same extent is
+what `copyToPoints` and `spawnInstances` place a mesh by. `setBounds`'
+anchors (`center`, `baseCenter`, `min`) size a box ABOUT P and do not add
+P to it. Every piece a grammar cuts keeps its root's P, rot and scale, so
+the box nodes work in local units: sizes, `units` "absolute", margins,
+thicknesses and snap lattices (anchored at the cell's P) all scale with
+the point, the way an instance does, and a root at scale 2 doubles every
+storey. The convention is that grammar roots carry scale 1 and put their
+sizes in the bounds; nothing enforces it. `splitBox`'s `longest` compares
+the local spans `hi - lo`, so under a non-uniform scale it is the longest
+in the box's own units (bake the scale into the box first to cut the
+world-longest). Face names (`shellSplit`'s "south" is min z) are the box's
+own sides, so rules written once turn with the building. A non-uniform
+`transformPoints` scale on a ROTATED cell composes into the point's scale
+componentwise, in the point's own frame: it stretches the cell along its
+own axes, the way `copyToPoints` composes a copy, and is not the affine
+image of the world box (which a box could not represent).
+
+Two consumers matter at the end of a grammar. `boxesToMesh` builds every
+face through the cell's P, rot and scale, so it needs nothing before it.
+An instance placed by `copyToPoints` or `spawnInstances` lands AT P, so a
+piece's P must first move to the piece: `pivotBox` moves P to a point of
+the box (its centre by default) and re-expresses the box about it,
+keeping the world box. The cell-to-instance tail is `pivotBox`, then
+`setAttribute` `scale` = `mul(attribute("scale", 3), box("size"))` and a
+`setBounds` unit box `[-0.5, -0.5, -0.5]`..`[0.5, 0.5, 0.5]`, then
+`copyToPoints` or `spawnInstances`. Pivot at the END: after a pivot every
+cell has its own P, so neighbouring pieces belong to different frames,
+their shared faces stop being bit-exact, and `boxContact` loses its
+same-frame comparison (it then compares the boxes in world space,
+through each point's transform). A
+world-space fact about a box — its world centre, say — is read after
+`pivotBox` as `position()`; the grammar has no world-space box name.
+
 Inside a node param it reads the box that node was HANDED. `setBounds`
 resolves both corners against the incoming box before writing either, so
 a box name in either corner reads the box the node received, never one

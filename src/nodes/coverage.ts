@@ -83,6 +83,11 @@ interface BoxTable {
  * over everything. The default `boxSize` of [1, 1, 1] is the unit-cube
  * asset, for which `scale` alone IS the size.
  *
+ * Every box is CENTRED on its point. A point's own bounds are an extent
+ * about P in its frame that need not be centred (a `baseCenter` box stands
+ * on P; a grammar piece keeps its root's P), so `box("size")` as `boxSize`
+ * is right only after `pivotBox` has moved P to the box's centre.
+ *
  * A `rot` that is not unit length is normalized here (a zero quaternion
  * reads as identity). The slab test needs an orthonormal frame, and a
  * non-unit quaternion rotated straight through would skew it. Note that
@@ -335,7 +340,7 @@ export const pathCoverage = standardNode<
       default: [1, 1, 1],
       acceptsField: true,
       description:
-        "Extent of one box along its own local X, Y and Z axes BEFORE the per-point `scale` is applied — the size of the asset the cloud stands for. The world half-extent is 0.5 * boxSize * scale componentwise, so the default [1, 1, 1] means 'the points carry unit cubes and `scale` IS the size', which is the common case. As a FIELD it is resolved ON THE BOXES CLOUD, not on the path, so attribute(\"...\") inside it reads the boxes' own columns: a cloud carrying its extents in the standard bounds attributes is subtract(attribute(\"boundsMax\"), attribute(\"boundsMin\")). GETTING THIS WRONG IS SILENT IN BOTH DIRECTIONS: scaling twice inflates every box and reports a tunnel over the whole path, forgetting `scale` shrinks them and reports no cover anywhere, and each produces a run that finishes cleanly with a wrong number in it. Boxes are centred on their points; a negative size is read as its magnitude, since a box of size -2 is the same set of points as one of size 2.",
+        "Extent of one box along its own local X, Y and Z axes BEFORE the per-point `scale` is applied — the size of the asset the cloud stands for. The world half-extent is 0.5 * boxSize * scale componentwise, so the default [1, 1, 1] means 'the points carry unit cubes and `scale` IS the size', which is the common case. As a FIELD it is resolved ON THE BOXES CLOUD, not on the path, so attribute(\"...\") inside it reads the boxes' own columns: a cloud carrying its extents in the standard bounds attributes is box(\"size\") (boundsMax - boundsMin, an extent in the point's own frame, which `scale` then multiplies as here). GETTING THIS WRONG IS SILENT IN BOTH DIRECTIONS: scaling twice inflates every box and reports a tunnel over the whole path, forgetting `scale` shrinks them and reports no cover anywhere, and each produces a run that finishes cleanly with a wrong number in it. Boxes are CENTRED ON THEIR POINTS, so box(\"size\") is the right extent only for a box centred on P: a point's bounds are an extent about P that need not be centred (setBounds \"baseCenter\" stands the box on P, and a grammar's pieces keep their root's P), and such a box is tested displaced by its centre offset. Run pivotBox (default pivot, the box's centre) first, which moves P to the box's centre and keeps the box where it is. A negative size is read as its magnitude, since a box of size -2 is the same set of points as one of size 2.",
     },
     coveredAttr: {
       type: "string",
