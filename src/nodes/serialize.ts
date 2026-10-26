@@ -2822,7 +2822,9 @@ function readGraphDocument(json: unknown, ctx: ReadContext, sink: Sink): Graph {
           schemaOf: (key) => (Object.hasOwn(schemas, key) ? schemas[key] : undefined),
           valid,
           unknownMessage: (key, clause) =>
-            `node "${id}": unknown param "${key}" for type "${type}"; ${clause}valid params: ${valid.join(", ")}`,
+            reg.info.removedParams !== undefined && Object.hasOwn(reg.info.removedParams, key)
+              ? `node "${id}": param "${key}" was removed from type "${type}" — ${reg.info.removedParams[key]} Valid params: ${valid.join(", ")}`
+              : `node "${id}": unknown param "${key}" for type "${type}"; ${clause}valid params: ${valid.join(", ")}`,
           declaredParams,
           bindings,
           accepted,

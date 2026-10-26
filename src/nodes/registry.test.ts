@@ -541,3 +541,12 @@ describe("category metadata", () => {
     }
   });
 });
+
+describe("removed params", () => {
+  it("are published by listNodeTypes as getNodeType holds them, and only on a type that has any", () => {
+    const listed = listNodeTypes().find((t) => t.type === "boxContact");
+    expect(Object.keys(listed?.removedParams ?? {})).toEqual(["queryFrame", "targetFrame"]);
+    expect(listed?.removedParams).toEqual(getNodeType("boxContact").info.removedParams);
+    expect(listNodeTypes().find((t) => t.type === "splitBox")).not.toHaveProperty("removedParams");
+  });
+});

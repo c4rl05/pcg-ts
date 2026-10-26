@@ -99,14 +99,8 @@ describe("on-demand pins in the editor's auto policy", () => {
     // where the auto policy never looks.
     const g = new Graph(1);
     const grid = g.add(pointGrid, { countX: 2, countY: 1, countZ: 2, spacing: [4, 4, 4] }, "grid");
-    const rooms = g.add(
-      setBounds,
-      {
-        boundsMin: fieldFromJson({ fn: "position" }),
-        boundsMax: fieldFromJson({ fn: "add", args: [{ fn: "position" }, [4, 3, 4]] }),
-      },
-      "rooms",
-    );
+    // Constant LOCAL corners: each room's box sits at its point's P.
+    const rooms = g.add(setBounds, { boundsMin: [0, 0, 0], boundsMax: [4, 3, 4] }, "rooms");
     const probe = g.add(boxContact, { mode: "touch", excludeSelf: true }, "probe");
     g.connect(grid, "out", rooms, "in");
     g.connect(rooms, "out", probe, "in");

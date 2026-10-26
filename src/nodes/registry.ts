@@ -69,6 +69,13 @@ export interface NodeSpec<P, I extends string = string, O extends string = strin
    * {@link NodeDef.selfMetered} and {@link NodeTypeInfo.selfMetered}.
    */
   readonly selfMetered?: boolean;
+  /**
+   * Params this type HAD and no longer has, each with why and what to
+   * write instead. A graph file that still sets one is refused on load
+   * with that text, not the generic "unknown param", so the fix is in the
+   * message. Published in the catalog ({@link NodeTypeInfo.removedParams}).
+   */
+  readonly removedParams?: Readonly<Record<string, string>>;
 }
 
 /** JSON-safe pin metadata. */
@@ -123,6 +130,8 @@ export interface NodeTypeInfo {
    * `subgraph`, `forEach` and `repeatUntil` carry it.
    */
   readonly selfMetered?: boolean;
+  /** Params the type no longer has, with why and the fix; see {@link NodeSpec.removedParams}. Absent when none. */
+  readonly removedParams?: Readonly<Record<string, string>>;
 }
 
 /** A registered node type: the executable def plus its JSON-safe metadata. */
@@ -278,6 +287,7 @@ export function standardNode<P, I extends string = string, O extends string = st
       // all — the catalog's JSON stays byte-identical for every one of
       // them.
       ...(spec.selfMetered !== undefined ? { selfMetered: spec.selfMetered } : {}),
+      ...(spec.removedParams !== undefined ? { removedParams: { ...spec.removedParams } } : {}),
     },
   });
   return def;
@@ -323,5 +333,6 @@ export function listNodeTypes(): NodeTypeInfo[] {
     // added to NodeTypeInfo and not added HERE is silently dropped from
     // every caller's copy while the stored `info` still carries it.
     ...(entry.info.selfMetered !== undefined ? { selfMetered: entry.info.selfMetered } : {}),
+    ...(entry.info.removedParams !== undefined ? { removedParams: { ...entry.info.removedParams } } : {}),
   }));
 }

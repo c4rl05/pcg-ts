@@ -7,6 +7,11 @@
  * polytopes meet exactly when a corner of one lies in the other or an edge
  * of one crosses the other), which is a different argument from the
  * node's separating axes. Nothing is recorded from a run.
+ *
+ * ONE READING: every box is its point's local extent, world = P + rot *
+ * (scale * corner), and a margin is in the box's own units (scaled with
+ * it). The interval reference is that reading at the identity transform
+ * (P 0, no rot, scale 1), where the box is its own world box.
  */
 import { describe, expect, it } from "vitest";
 import { Geometry, createPointCloud } from "../data/index.js";
@@ -153,6 +158,11 @@ interface Obb {
   empty: boolean;
 }
 
+/**
+ * `local` false reads the corners as world corners (the identity
+ * transform); true places them by P, rot and scale. A margin is in the
+ * box's OWN units, so it is scaled by |scale| along its axis.
+ */
 function obbOf(s: BoxSpec, local: boolean, margin: number[] = [0, 0, 0]): Obb {
   const lo = s.lo.map(f) as V;
   const hi = s.hi.map(f) as V;
@@ -187,10 +197,12 @@ function obbOf(s: BoxSpec, local: boolean, margin: number[] = [0, 0, 0]): Obb {
     }
   }
   let empty = false;
+  const sAbs = local ? (s.scale ?? [1, 1, 1]).map((v) => Math.abs(f(v))) : [1, 1, 1];
   for (let k = 0; k < 3; k++) {
-    o = sub(o, mul(d[k], margin[k]));
-    len[k] += 2 * margin[k];
-    if (len[k] < 0) empty = true;
+    // Empty is decided in the box's own units, so a zero scale cannot hide it.
+    if (f(s.hi[k]) - f(s.lo[k]) + 2 * margin[k] < 0) empty = true;
+    o = sub(o, mul(d[k], margin[k] * sAbs[k]));
+    len[k] += 2 * margin[k] * sAbs[k];
   }
   return { o, d, len, empty };
 }
@@ -385,12 +397,10 @@ describe("boxContact: oriented boxes against the corner-and-edge reference", () 
   const minHits: Record<Mode, number> = { overlap: 20, touch: 20, contain: 3, inside: 3 };
 
   for (const mode of MODES) {
-    it(`${mode}, both local: matches the reference exactly`, async () => {
+    it(`${mode}, random oriented boxes in their own frames: matches the reference exactly, margins scaled with the box`, async () => {
       const got = await answer(setMargin(cloud(qs), margins), cloud(ts), {
         mode,
         margin: marginField,
-        queryFrame: "local",
-        targetFrame: "local",
       });
       const want = obbReference(qs, true, ts, true, mode, margins);
       expect(got).toEqual(want);
@@ -398,10 +408,10 @@ describe("boxContact: oriented boxes against the corner-and-edge reference", () 
     });
   }
 
-  it("world queries against local targets: the frames are chosen per input", async () => {
+  it("boxes at the identity against oriented boxes: two frames, compared in the world", async () => {
     const aabbs = latticeBoxes(rand, 80, 10, 4).map((b) => ({ lo: b.lo.map((v) => v - 5), hi: b.hi.map((v) => v - 5) }));
     for (const mode of MODES) {
-      const got = await answer(cloud(aabbs), cloud(ts), { mode, targetFrame: "local" });
+      const got = await answer(cloud(aabbs), cloud(ts), { mode });
       const want = obbReference(aabbs, false, ts, true, mode, aabbs.map(() => [0, 0, 0]));
       expect(got).toEqual(want);
     }
@@ -421,49 +431,65 @@ describe("boxContact: oriented boxes against the corner-and-edge reference", () 
     });
     const a = cloud([slab(0)]);
     const b = cloud([slab(1.2)]);
-    const local = { queryFrame: "local", targetFrame: "local" };
-    expect((await answer(a, b, { ...local, mode: "touch" })).hit).toEqual([0]);
-    expect((await answer(a, b, { mode: "touch" })).hit).toEqual([1]); // as world AABBs they would
-    expect((await answer(a, b, { ...local, mode: "touch", margin: [0.21, 0, 0] })).hit).toEqual([1]);
-    expect((await answer(a, b, { ...local, mode: "touch", margin: [0.19, 0, 0] })).hit).toEqual([0]);
+    expect((await answer(a, b, { mode: "touch" })).hit).toEqual([0]);
+    expect((await answer(a, b, { mode: "touch", margin: [0.21, 0, 0] })).hit).toEqual([1]);
+    expect((await answer(a, b, { mode: "touch", margin: [0.19, 0, 0] })).hit).toEqual([0]);
     expect(obbMeet(obbOf(slab(0), true), obbOf(slab(1.2), true))).toBe(false);
+    // As axis-aligned boxes of their world corners they WOULD meet.
+    const aabbOf = (s: BoxSpec): BoxSpec => {
+      const cs = corners(obbOf(s, true));
+      return { lo: [0, 1, 2].map((k) => Math.min(...cs.map((c) => c[k]))), hi: [0, 1, 2].map((k) => Math.max(...cs.map((c) => c[k]))) };
+    };
+    expect((await answer(cloud([aabbOf(slab(0))]), cloud([aabbOf(slab(1.2))]), { mode: "touch" })).hit).toEqual([1]);
   });
 });
 
 describe("boxContact: exact contact under a shared rotation", () => {
   // A rigid motion keeps a shared face shared, so a box, its face
   // neighbour and a box flush inside it, all under ONE P and rot, must
-  // read the same under every rotation as they do unrotated. Each centre
-  // is rotated on its own and picks up rounding; before the boundary band
-  // this decided about a third of the overlaps and half the touches.
+  // read the same under every rotation as they do unrotated. Under one
+  // stored P and rot they are ONE FRAME, compared on their local corners
+  // exactly (the same-frame regime). The twin scene gives the target the
+  // NEGATED quaternion — the same rotation, other bits, so two frames —
+  // which sends it through the world oriented test, where each centre is
+  // rotated on its own and picks up rounding; before the boundary band
+  // that decided about a third of the overlaps and half the touches. -q
+  // rotates by the same products as q, so the world numbers are the ones
+  // the band was measured on.
   const rand = rng(41);
   const N = 500;
   const frames = Array.from({ length: N }, (_, i) => ({ P: [i * 20, Math.floor(rand() * 7), -3], rot: randomQuat(rand) }));
-  const at = (lo: number[], hi: number[]): Geometry => cloud(frames.map((fr) => ({ lo, hi, ...fr })));
+  const at = (lo: number[], hi: number[], negate = false): Geometry =>
+    cloud(frames.map((fr) => ({ lo, hi, P: fr.P, rot: negate ? fr.rot.map((v) => -v) : fr.rot })));
   const big = (): Geometry => at([0, 0, 0], [2, 1, 1]);
-  const neighbour = (): Geometry => at([2, 0, 0], [3, 1, 1]);
-  const flush = (): Geometry => at([0, 0.25, 0.25], [1, 0.75, 0.75]);
-  const local = { queryFrame: "local", targetFrame: "local" };
   const ones = Array(N).fill(1);
   const zeros = Array(N).fill(0);
 
-  it("a shared face: never an overlap, always a touch", async () => {
-    expect((await answer(big(), neighbour(), { ...local, mode: "overlap" })).hit).toEqual(zeros);
-    expect((await answer(big(), neighbour(), { ...local, mode: "touch" })).hit).toEqual(ones);
-  });
+  for (const [name, negate] of [
+    ["one frame (local corners, exact)", false],
+    ["two frames, the same rotation (the world test and its band)", true],
+  ] as const) {
+    const neighbour = (): Geometry => at([2, 0, 0], [3, 1, 1], negate);
+    const flush = (): Geometry => at([0, 0.25, 0.25], [1, 0.75, 0.75], negate);
 
-  it("a box flush inside: always contained, and always inside", async () => {
-    expect((await answer(big(), flush(), { ...local, mode: "contain" })).hit).toEqual(ones);
-    expect((await answer(flush(), big(), { ...local, mode: "inside" })).hit).toEqual(ones);
-    expect((await answer(big(), flush(), { ...local, mode: "overlap" })).hit).toEqual(ones);
-  });
+    it(`${name}: a shared face is never an overlap, always a touch`, async () => {
+      expect((await answer(big(), neighbour(), { mode: "overlap" })).hit).toEqual(zeros);
+      expect((await answer(big(), neighbour(), { mode: "touch" })).hit).toEqual(ones);
+    });
 
-  it("the band is narrow: a real gap of 1e-6 is still apart, a real overlap of 1e-6 still overlaps", async () => {
-    const apart = at([2 + 1e-6 * 2, 0, 0], [3, 1, 1]);
-    const into = at([2 - 1e-6 * 2, 0, 0], [3, 1, 1]);
-    expect((await answer(big(), apart, { ...local, mode: "touch" })).hit).toEqual(zeros);
-    expect((await answer(big(), into, { ...local, mode: "overlap" })).hit).toEqual(ones);
-  });
+    it(`${name}: a box flush inside is always contained, and always inside`, async () => {
+      expect((await answer(big(), flush(), { mode: "contain" })).hit).toEqual(ones);
+      expect((await answer(flush(), big(), { mode: "inside" })).hit).toEqual(ones);
+      expect((await answer(big(), flush(), { mode: "overlap" })).hit).toEqual(ones);
+    });
+
+    it(`${name}: a real gap of 1e-6 is still apart, a real overlap of 1e-6 still overlaps`, async () => {
+      const apart = at([2 + 1e-6 * 2, 0, 0], [3, 1, 1], negate);
+      const into = at([2 - 1e-6 * 2, 0, 0], [3, 1, 1], negate);
+      expect((await answer(big(), apart, { mode: "touch" })).hit).toEqual(zeros);
+      expect((await answer(big(), into, { mode: "overlap" })).hit).toEqual(ones);
+    });
+  }
 });
 
 describe("boxContact: near-parallel edges", () => {
@@ -487,7 +513,6 @@ describe("boxContact: near-parallel edges", () => {
     new Int32Array(buf.buffer)[0] += steps;
     return buf[0];
   };
-  const local = { queryFrame: "local", targetFrame: "local" };
 
   for (const theta of [1e-3, 1e-5, 3e-6, 1.2e-6]) {
     it(`twisted by ${theta} rad: touch and overlap match the reference on every f32 step through contact`, async () => {
@@ -498,7 +523,7 @@ describe("boxContact: near-parallel edges", () => {
       expect(new Set(want)).toEqual(new Set([0, 1]));
       for (const mode of ["touch", "overlap"] as const) {
         const got: number[] = [];
-        for (const H of heights) got.push((await answer(cloud([lower]), cloud([bar([0, 0, H], rotB)]), { ...local, mode })).hit[0]);
+        for (const H of heights) got.push((await answer(cloud([lower]), cloud([bar([0, 0, H], rotB)]), { mode })).hit[0]);
         expect([mode, got]).toEqual([mode, want]);
       }
     });
@@ -508,7 +533,9 @@ describe("boxContact: near-parallel edges", () => {
 describe("boxContact: nearest-target ties under rotation", () => {
   // Four targets on the four sides of a query, all under the query's own P
   // and rot: their true centre distances are equal under every rotation,
-  // and only rounding tells them apart. The lowest index must win.
+  // and only rounding tells them apart. The lowest index must win. The
+  // hits are same-frame (local, exact); the nearest is measured between
+  // WORLD centres, where the tie band does its work.
   const rand = rng(51);
   const cases = 200;
   const frames = Array.from({ length: cases }, (_, i) => ({ P: [i * 50 + 0.37, 1.5, -2.25], rot: randomQuat(rand) }));
@@ -541,7 +568,7 @@ describe("boxContact: nearest-target ties under rotation", () => {
     const q = cloud(frames.map((fr) => ({ lo: [0, 0, 0], hi: [2, 2, 2], ...fr })));
     for (const order of [[0, 1, 2, 3], [3, 2, 1, 0], [2, 0, 3, 1]]) {
       const t = cloud(frames.flatMap((fr) => order.map((k) => ({ lo: sides[k][0], hi: sides[k][1], ...fr }))));
-      const got = await answer(q, t, { mode: "touch", queryFrame: "local", targetFrame: "local" });
+      const got = await answer(q, t, { mode: "touch" });
       expect(got.count).toEqual(Array(cases).fill(4));
       expect(got.target).toEqual(frames.map((_, i) => i * 4));
     }
@@ -598,16 +625,16 @@ describe("boxContact: one-sided margins", () => {
     expect(Array.from(out.attrs.point.require("boundsMax").data.slice(0, 3))).toEqual([4, 3, 1]);
   });
 
-  it('"local": the min side is the boundsMin side in the box\'s own frame, a negative scale included', async () => {
+  it("the min side is the boundsMin side in the box's own frame, a negative scale included", async () => {
     // Local x mirrored: the box spans world x [-1, 0], and its boundsMin
     // face (local x = 0) is the world face at x = 0.
     const q = cloud([{ lo: [0, 0, 0], hi: [1, 1, 1], scale: [-1, 1, 1] }]);
     const right = cloud([{ lo: [0.3, 0, 0], hi: [1, 1, 1] }]);
     const left = cloud([{ lo: [-2, 0, 0], hi: [-1.3, 1, 1] }]);
-    const p = { mode: "touch", queryFrame: "local", marginMin: [0.5, 0, 0] };
+    const p = { mode: "touch", marginMin: [0.5, 0, 0] };
     expect(col(await contact(q, right, p), "contact")).toEqual([1]);
     expect(col(await contact(q, left, p), "contact")).toEqual([0]);
-    const pm = { mode: "touch", queryFrame: "local", marginMax: [0.5, 0, 0] };
+    const pm = { mode: "touch", marginMax: [0.5, 0, 0] };
     expect(col(await contact(q, right, pm), "contact")).toEqual([0]);
     expect(col(await contact(q, left, pm), "contact")).toEqual([1]);
   });
@@ -621,34 +648,83 @@ describe("boxContact: one-sided margins", () => {
   });
 });
 
-describe("boxContact: frames", () => {
-  it('"world" ignores P, rot and scale entirely', async () => {
+describe("boxContact: one reading, through the point's transform", () => {
+  it("one SHARED transform, rotated and non-uniformly scaled, changes no answer: the pairs are compared in their frame", async () => {
     const rand = rng(3);
     const qs = latticeBoxes(rand, 40, 8, 3);
     const ts = latticeBoxes(rand, 40, 8, 3);
-    const plain = await answer(cloud(qs), cloud(ts), { mode: "touch" });
-    const noisy = (bs: BoxSpec[]): BoxSpec[] => bs.map((b) => ({ ...b, P: [rand() * 100, 3, -7], rot: randomQuat(rand), scale: [2, -3, 0.5] }));
-    expect(await answer(cloud(noisy(qs)), cloud(noisy(ts)), { mode: "touch" })).toEqual(plain);
-  });
-
-  it('"local" at the identity transform is "world"', async () => {
-    const rand = rng(4);
-    const qs = latticeBoxes(rand, 40, 8, 3);
-    const ts = latticeBoxes(rand, 40, 8, 3);
+    const tf = { P: [37.25, 3, -7], rot: randomQuat(rand), scale: [2, -3, 0.5] };
+    const moved = (bs: BoxSpec[]): BoxSpec[] => bs.map((b) => ({ ...b, ...tf }));
     for (const mode of MODES) {
-      const w = await answer(cloud(qs), cloud(ts), { mode });
-      const l = await answer(cloud(qs), cloud(ts), { mode, queryFrame: "local", targetFrame: "local" });
-      expect(l).toEqual(w);
+      const plain = await answer(cloud(qs), cloud(ts), { mode });
+      const got = await answer(cloud(moved(qs)), cloud(moved(ts)), { mode });
+      // Hits and counts are the frame's; the nearest is measured between
+      // world centres, which a non-uniform scale reorders.
+      expect([mode, got.hit, got.count]).toEqual([mode, plain.hit, plain.count]);
+      expect(plain.hit.reduce((a, b) => a + b, 0)).toBeGreaterThan(mode === "overlap" || mode === "touch" ? 5 : 0);
     }
   });
 
-  it('"local" places the box by P and scale: a unit box at P = (10, 0, 0) scaled 2', async () => {
+  it("P moves a box: corners local to an integer P answer as the same corners pre-added (P + L exact), nearest included", async () => {
+    const rand = rng(4);
+    const qs = latticeBoxes(rand, 40, 8, 3);
+    const ts = latticeBoxes(rand, 40, 8, 3);
+    const Ps = (n: number) => Array.from({ length: n }, () => [0, 1, 2].map(() => Math.floor(rand() * 9) - 4));
+    const qP = Ps(qs.length);
+    const tP = Ps(ts.length);
+    const local = (bs: BoxSpec[], P: number[][]): BoxSpec[] => bs.map((b, i) => ({ lo: b.lo, hi: b.hi, P: P[i] }));
+    const world = (bs: BoxSpec[], P: number[][]): BoxSpec[] => bs.map((b, i) => ({ lo: b.lo.map((v, k) => v + P[i][k]), hi: b.hi.map((v, k) => v + P[i][k]) }));
+    for (const mode of MODES) {
+      const w = await answer(cloud(world(qs, qP)), cloud(world(ts, tP)), { mode });
+      const l = await answer(cloud(local(qs, qP)), cloud(local(ts, tP)), { mode });
+      expect([mode, l]).toEqual([mode, w]);
+    }
+  });
+
+  it("places the box by P and scale: a unit box at P = (10, 0, 0) scaled 2", async () => {
     const q = cloud([{ lo: [-0.5, -0.5, -0.5], hi: [0.5, 0.5, 0.5], P: [10, 0, 0], scale: [2, 2, 2] }]);
     const near = cloud([{ lo: [11, -1, -1], hi: [12, 1, 1] }]); // touches the face at x = 11
     const far = cloud([{ lo: [11.01, -1, -1], hi: [12, 1, 1] }]);
-    expect((await answer(q, near, { mode: "touch", queryFrame: "local" })).hit).toEqual([1]);
-    expect((await answer(q, near, { mode: "overlap", queryFrame: "local" })).hit).toEqual([0]);
-    expect((await answer(q, far, { mode: "touch", queryFrame: "local" })).hit).toEqual([0]);
+    expect((await answer(q, near, { mode: "touch" })).hit).toEqual([1]);
+    expect((await answer(q, near, { mode: "overlap" })).hit).toEqual([0]);
+    expect((await answer(q, far, { mode: "touch" })).hit).toEqual([0]);
+  });
+
+  it("a margin is in the box's own units: scale 2 doubles it, as offsetBox's margin on the box itself", async () => {
+    // The unit box at x = 10 scaled 2 spans [9, 11]; a target at [11.5, 12].
+    const q = cloud([{ lo: [-0.5, -0.5, -0.5], hi: [0.5, 0.5, 0.5], P: [10, 0, 0], scale: [2, 2, 2] }]);
+    const t = cloud([{ lo: [11.5, -1, -1], hi: [12, 1, 1] }]);
+    // 0.25 local = 0.5 world: reaches exactly; 0.24 does not.
+    expect((await answer(q, t, { mode: "touch", marginMax: [0.25, 0, 0] })).hit).toEqual([1]);
+    expect((await answer(q, t, { mode: "touch", marginMax: [0.24, 0, 0] })).hit).toEqual([0]);
+    // Grown in the box's units first, the box is [-0.5, 0.75] locally: the same answer.
+    const grown = cloud([{ lo: [-0.5, -0.5, -0.5], hi: [0.75, 0.5, 0.5], P: [10, 0, 0], scale: [2, 2, 2] }]);
+    expect((await answer(grown, t, { mode: "touch" })).hit).toEqual([1]);
+  });
+
+  it("the prefilter's slack follows the terms a centre is summed from, not the centre: a huge P cancelling a huge offset keeps its exact corner contact", async () => {
+    // Found by the independent verification: P ~ 9e8 cancels R S c, the
+    // world centres sit near the origin, and a slack taken from them was
+    // smaller than their rounding, so this same-frame corner contact (on
+    // the bounding-sphere bound exactly) was dropped — unless an unrelated
+    // far target happened to widen the slack.
+    const fr = { P: [68804720, 886696960, -404719104], rot: [0.44241803884506226, -0.7592130899429321, -0.41246113181114197, 0.2402864396572113], scale: [3, 0.5, -2] };
+    const q = cloud([{ ...fr, lo: [268435456, 268435456, 268435456], hi: [268435488, 268435488, 268435488] }]);
+    const t = { ...fr, lo: [268435488, 268435424, 268435488], hi: [268435520, 268435456, 268435520] };
+    expect((await answer(q, cloud([t]), { mode: "touch" })).count).toEqual([1]);
+    expect((await answer(q, cloud([t]), { mode: "overlap" })).count).toEqual([0]);
+    const far = { P: [1e6, 0, 0], lo: [0, 0, 0], hi: [1, 1, 1] };
+    expect((await answer(q, cloud([t, far]), { mode: "touch" })).count).toEqual([1]);
+  });
+
+  it("a zero scale is not a frame: two boxes apart in local, coinciding in the world, touch", async () => {
+    // Under scale [0, 1, 1] both boxes collapse onto x = 5 in the world.
+    const tf = { P: [5, 0, 0], scale: [0, 1, 1] };
+    const q = cloud([{ lo: [0, 0, 0], hi: [1, 1, 1], ...tf }]);
+    const t = cloud([{ lo: [3, 0, 0], hi: [4, 1, 1], ...tf }]);
+    expect((await answer(q, t, { mode: "touch" })).hit).toEqual([1]);
+    // The same two under scale 1 are apart.
+    expect((await answer(cloud([{ lo: [0, 0, 0], hi: [1, 1, 1], P: [5, 0, 0] }]), cloud([{ lo: [3, 0, 0], hi: [4, 1, 1], P: [5, 0, 0] }]), { mode: "touch" })).hit).toEqual([0]);
   });
 });
 
@@ -820,7 +896,8 @@ describe("boxContact: what passes through", () => {
     const q = cloud([{ lo: [0, 0, 0], hi: [1, 1, 1], P: [3, 4, 5] }]);
     q.attrs.point.add("label", "string", 1, "").setString(0, "bay");
     const before = snapshotGeometry(q);
-    const out = await contact(q, cloud([{ lo: [0, 0, 0], hi: [2, 2, 2] }]));
+    // The query's box sits at its P: world [3, 4] x [4, 5] x [5, 6].
+    const out = await contact(q, cloud([{ lo: [3, 4, 5], hi: [5, 6, 7] }]));
     expect(snapshotGeometry(q)).toEqual(before);
     type Snap = { point: { count: number; attrs: { name: string }[] } };
     const snap = snapshotGeometry(out) as unknown as Snap;
@@ -845,7 +922,7 @@ describe("boxContact: determinism and scale", () => {
   const rand = rng(21);
   const qs = orientedBoxes(rand, 400, 0.2, 1.5).map((b) => ({ ...b, P: b.P!.map((v) => v * 3) }));
   const ts = orientedBoxes(rand, 500, 0.2, 1.5).map((b) => ({ ...b, P: b.P!.map((v) => v * 3) }));
-  const params = { mode: "touch", margin: 0.1, queryFrame: "local", targetFrame: "local", countAttr: "n", targetAttr: "who" };
+  const params = { mode: "touch", margin: 0.1, countAttr: "n", targetAttr: "who" };
 
   it("cooks byte-identically twice, and whatever the node seed", async () => {
     const a = await contact(cloud(qs), cloud(ts), params, 1);
@@ -902,23 +979,10 @@ describe("boxContact: in a graph", () => {
   function build(): Graph {
     const g = new Graph(17);
     const qGrid = g.add(pointGrid, { countX: 4, countY: 1, countZ: 4, spacing: [2, 2, 2] }, "queries");
-    const qBox = g.add(
-      setBounds,
-      {
-        boundsMin: fieldFromJson({ fn: "position" }),
-        boundsMax: fieldFromJson({ fn: "add", args: [{ fn: "position" }, [1, 1, 1]] }),
-      },
-      "queryBox",
-    );
+    // Constant LOCAL corners: each box sits at its point's P.
+    const qBox = g.add(setBounds, { boundsMin: [0, 0, 0], boundsMax: [1, 1, 1] }, "queryBox");
     const tGrid = g.add(pointGrid, { countX: 2, countY: 1, countZ: 2, spacing: [3, 3, 3], origin: [1.5, 0, 1.5] }, "targets");
-    const tBox = g.add(
-      setBounds,
-      {
-        boundsMin: fieldFromJson({ fn: "position" }),
-        boundsMax: fieldFromJson({ fn: "add", args: [{ fn: "position" }, [0.5, 1, 0.5]] }),
-      },
-      "targetBox",
-    );
+    const tBox = g.add(setBounds, { boundsMin: [0, 0, 0], boundsMax: [0.5, 1, 0.5] }, "targetBox");
     const probe = g.add(
       boxContact,
       {
@@ -981,10 +1045,10 @@ describe("boxContact: refusals", () => {
     expect(await rejection(contact(one(), bare))).toMatch(/pin "targets" has no "boundsMax" point attribute.*setBounds/);
   });
 
-  it('"local" on points with no P', async () => {
+  it("points with no P", async () => {
     const bare = one();
     bare.attrs.point.remove("P");
-    expect(await rejection(contact(bare, one(), { queryFrame: "local" }))).toMatch(/"queryFrame" is "local".*no P attribute/);
+    expect(await rejection(contact(bare, one()))).toMatch(/every box needs its point's position, but the input on pin "in" has no P attribute/);
   });
 
   it("nothing to write, and two reports on one name", async () => {
@@ -992,8 +1056,33 @@ describe("boxContact: refusals", () => {
     expect(await rejection(contact(one(), one(), { countAttr: "contact" }))).toMatch(/"hitAttr" and "countAttr" are both "contact"/);
   });
 
-  it("an unknown mode or frame, listing the valid ones", async () => {
+  it("an unknown mode, listing the valid ones", async () => {
     expect(await rejection(contact(one(), one(), { mode: "intersect" }))).toMatch(/valid: overlap, touch, contain, inside/);
-    expect(await rejection(contact(one(), one(), { targetFrame: "object" }))).toMatch(/valid: world, local/);
+  });
+
+  it("the removed frame params, by a direct call and in a graph file, naming the removal and the fix", async () => {
+    for (const gone of ["queryFrame", "targetFrame"]) {
+      for (const value of ["world", "local"]) {
+        expect(await rejection(contact(one(), one(), { [gone]: value }))).toMatch(
+          new RegExp(`^boxContact: param "${gone}" was removed — boxContact reads every box one way now`),
+        );
+      }
+      const doc = {
+        formatVersion: 1,
+        seed: 1,
+        nodes: [
+          { id: "a", type: "pointGrid", params: {} },
+          { id: "c", type: "boxContact", params: { [gone]: "world" } },
+        ],
+        connections: [
+          { from: ["a", "out"], to: ["c", "in"] },
+          { from: ["a", "out"], to: ["c", "targets"] },
+        ],
+        outputs: [{ id: "c", pin: "out", name: "out" }],
+      };
+      expect(() => deserializeGraph(doc as never)).toThrow(
+        new RegExp(`node "c": param "${gone}" was removed from type "boxContact" — .*Delete the param\\..*Valid params: mode, margin`),
+      );
+    }
   });
 });

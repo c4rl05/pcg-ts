@@ -147,7 +147,9 @@ const ALONG: Record<string, [number, number]> = {
 };
 
 // ---------------------------------------------------------------------------
-// The reference: intervals, world frame only.
+// The reference: intervals, for boxes in ONE frame (here the identity, so
+// a box is its own world box). The pair point is in the query's frame: it
+// carries the query's P (rot and scale stay the identity here).
 
 interface Margins {
   sym?: number[];
@@ -203,7 +205,7 @@ function reference(
           hi.push(Math.min(a1[k], b1[k]));
         }
       }
-      const p: Pair = { q: i, t: j, lo: lo.map(f), hi: hi.map(f), P: lo.map((v, k) => f(0.5 * (f(v) + f(hi[k])))) };
+      const p: Pair = { q: i, t: j, lo: lo.map(f), hi: hi.map(f), P: (qb.P ?? [0, 0, 0]).map(f) };
       if (mode === "touch") {
         if (flush.length === 2) {
           const ow = [0, 0, 0];
@@ -232,7 +234,8 @@ function box(lo: number[], size: number[], id?: number): BoxSpec {
 
 describe("boxContact pairs: hand-built room layouts", () => {
   // A 2x2 plan, rooms 4 x 3 x 4: A south-west, B south-east, C north-west,
-  // D north-east (north is +z).
+  // D north-east (north is +z). Every room's P is the origin, so the pair
+  // points, in the query's frame, sit at P = [0, 0, 0]; the region is the box.
   const plan = [box([0, 0, 0], [4, 3, 4]), box([4, 0, 0], [4, 3, 4]), box([0, 0, 4], [4, 3, 4]), box([4, 0, 4], [4, 3, 4])];
 
   it("a 2x2 grid: four shared walls seen from both sides, four corner edges, nothing else", async () => {
@@ -249,17 +252,17 @@ describe("boxContact pairs: hand-built room layouts", () => {
     ]);
     const at = (q: number, t: number) => got.find((p) => p.q === q && p.t === t)!;
     // A|B: the wall x = 4, the full 3 x 4 of it, east of A.
-    expect(at(0, 1)).toMatchObject({ lo: [4, 0, 0], hi: [4, 3, 4], P: [4, 1.5, 2], outward: [1, 0, 0], outAxis: 0, alongAxis: 2, alongSign: -1 });
+    expect(at(0, 1)).toMatchObject({ lo: [4, 0, 0], hi: [4, 3, 4], P: [0, 0, 0], outward: [1, 0, 0], outAxis: 0, alongAxis: 2, alongSign: -1 });
     // The same wall from B: west of B.
     expect(at(1, 0)).toMatchObject({ lo: [4, 0, 0], hi: [4, 3, 4], outward: [-1, 0, 0], outAxis: 0, alongAxis: 2, alongSign: 1 });
     // A|C: z = 4, north of A; C sees it to its south.
-    expect(at(0, 2)).toMatchObject({ lo: [0, 0, 4], hi: [4, 3, 4], P: [2, 1.5, 4], outward: [0, 0, 1], outAxis: 2, alongAxis: 0, alongSign: 1 });
+    expect(at(0, 2)).toMatchObject({ lo: [0, 0, 4], hi: [4, 3, 4], P: [0, 0, 0], outward: [0, 0, 1], outAxis: 2, alongAxis: 0, alongSign: 1 });
     expect(at(2, 0)).toMatchObject({ outward: [0, 0, -1], outAxis: 2, alongAxis: 0, alongSign: -1 });
     // B|D and C|D.
     expect(at(1, 3)).toMatchObject({ lo: [4, 0, 4], hi: [8, 3, 4], outward: [0, 0, 1] });
     expect(at(2, 3)).toMatchObject({ lo: [4, 0, 4], hi: [4, 3, 8], outward: [1, 0, 0] });
     // A and D share only the vertical edge x = 4, z = 4: a segment, no face.
-    expect(at(0, 3)).toMatchObject({ lo: [4, 0, 4], hi: [4, 3, 4], P: [4, 1.5, 4], outward: [0, 0, 0], outAxis: -1, alongAxis: -1, alongSign: 0 });
+    expect(at(0, 3)).toMatchObject({ lo: [4, 0, 4], hi: [4, 3, 4], P: [0, 0, 0], outward: [0, 0, 0], outAxis: -1, alongAxis: -1, alongSign: 0 });
     expect(at(1, 2)).toMatchObject({ lo: [4, 0, 4], hi: [4, 3, 4], outAxis: -1 });
     expect(got).toEqual(reference(plan, plan, "touch", {}, (i, j) => i === j));
   });
@@ -277,10 +280,10 @@ describe("boxContact pairs: hand-built room layouts", () => {
     const g = cloud(rooms);
     const got = readPairs((await run(g, g, { mode: "touch", excludeSelf: true })).pairs);
     const at = (q: number, t: number) => got.find((p) => p.q === q && p.t === t);
-    expect(at(0, 1)).toMatchObject({ lo: [0, 0, 3], hi: [3, 3, 3], P: [1.5, 1.5, 3], outward: [0, 0, 1], outAxis: 2 });
+    expect(at(0, 1)).toMatchObject({ lo: [0, 0, 3], hi: [3, 3, 3], P: [0, 0, 0], outward: [0, 0, 1], outAxis: 2 });
     expect(at(0, 2)).toMatchObject({ lo: [3, 0, 3], hi: [6, 3, 3], outward: [0, 0, 1], outAxis: 2 });
     // Arm | third room: x = 3, z from 3 to 5 — the third room is the shorter.
-    expect(at(1, 2)).toMatchObject({ lo: [3, 0, 3], hi: [3, 3, 5], P: [3, 1.5, 4], outward: [1, 0, 0], alongAxis: 2, alongSign: -1 });
+    expect(at(1, 2)).toMatchObject({ lo: [3, 0, 3], hi: [3, 3, 5], P: [0, 0, 0], outward: [1, 0, 0], alongAxis: 2, alongSign: -1 });
     expect(got).toHaveLength(6);
     expect(got).toEqual(reference(rooms, rooms, "touch", {}, (i, j) => i === j));
   });
@@ -291,7 +294,7 @@ describe("boxContact pairs: hand-built room layouts", () => {
     const touch = await run(a, b, { mode: "touch" });
     expect(col(touch.out, "contact")).toEqual([1]);
     expect(readPairs(touch.pairs)).toEqual([
-      { q: 0, t: 0, lo: [1, 1, 1], hi: [1, 1, 1], P: [1, 1, 1], outward: [0, 0, 0], outAxis: -1, alongAxis: -1, alongSign: 0 },
+      { q: 0, t: 0, lo: [1, 1, 1], hi: [1, 1, 1], P: [0, 0, 0], outward: [0, 0, 0], outAxis: -1, alongAxis: -1, alongSign: 0 },
     ]);
     expect((await run(a, b, { mode: "overlap" })).pairs.pointCount).toBe(0);
   });
@@ -319,7 +322,7 @@ describe("boxContact pairs: what each mode's box is", () => {
   it("overlap: the shared volume", async () => {
     const t = [box([3, 1, -1], [2, 2, 2])];
     const got = readPairs((await run(cloud(q), cloud(t), { mode: "overlap" })).pairs);
-    expect(got).toEqual([{ q: 0, t: 0, lo: [3, 1, 0], hi: [4, 3, 1], P: [3.5, 2, 0.5] }]);
+    expect(got).toEqual([{ q: 0, t: 0, lo: [3, 1, 0], hi: [4, 3, 1], P: [0, 0, 0] }]);
     // No face frame outside "touch".
     expect((await run(cloud(q), cloud(t), { mode: "overlap" })).pairs.attrs.point.get("outward")).toBeUndefined();
   });
@@ -327,12 +330,12 @@ describe("boxContact pairs: what each mode's box is", () => {
   it("contain: the target's box; inside: the query's as tested", async () => {
     const inner = [box([1, 1, 1], [1, 2, 1])];
     expect(readPairs((await run(cloud(q), cloud(inner), { mode: "contain" })).pairs)).toEqual([
-      { q: 0, t: 0, lo: [1, 1, 1], hi: [2, 3, 2], P: [1.5, 2, 1.5] },
+      { q: 0, t: 0, lo: [1, 1, 1], hi: [2, 3, 2], P: [0, 0, 0] },
     ]);
     // The query grown by 0.5 lies inside a 6-box: the region is the grown query.
     const outer = [box([-1, -1, -1], [6, 6, 6])];
     expect(readPairs((await run(cloud(q), cloud(outer), { mode: "inside", margin: [0.5, 0.5, 0.5] })).pairs)).toEqual([
-      { q: 0, t: 0, lo: [-0.5, -0.5, -0.5], hi: [4.5, 4.5, 4.5], P: [2, 2, 2] },
+      { q: 0, t: 0, lo: [-0.5, -0.5, -0.5], hi: [4.5, 4.5, 4.5], P: [0, 0, 0] },
     ]);
   });
 
@@ -556,7 +559,7 @@ describe("boxContact pairs: margins and exclusion", () => {
   });
 });
 
-describe("boxContact pairs: oriented boxes (a \"local\" frame)", () => {
+describe("boxContact pairs: boxes in different frames", () => {
   function rotY(theta: number): number[] {
     return [0, Math.sin(theta / 2), 0, Math.cos(theta / 2)];
   }
@@ -575,10 +578,10 @@ describe("boxContact pairs: oriented boxes (a \"local\" frame)", () => {
     return out;
   }
 
-  it("the pairs are exactly the hits, one target at a time, and carry no region", async () => {
+  it("oriented boxes in their own frames: the pairs are exactly the hits, one target at a time, and carry no region", async () => {
     const qs = rotated(40, 31);
     const ts = rotated(40, 32);
-    const params = { mode: "touch", queryFrame: "local", targetFrame: "local", countAttr: "n" };
+    const params = { mode: "touch", countAttr: "n" };
     const { out, pairs } = await run(cloud(qs), cloud(ts), params);
     const got = readPairs(pairs);
     // The brute-force set: the node's own exact test, asked of ONE target at
@@ -589,22 +592,69 @@ describe("boxContact pairs: oriented boxes (a \"local\" frame)", () => {
     expect(got.map((p) => [p.q, p.t])).toEqual(want);
     expect(want.length).toBeGreaterThan(10);
     expect(got.length).toBe(col(out, "n").reduce((s, v) => s + v, 0));
-    // No region: a zero box at P, the midpoint of the two centres (the
-    // centre of a box symmetric about its point is that point, P).
-    expect(pairs.attrs.point.get("outward")).toBeUndefined();
+    // No region: the zero box at P, P the midpoint of the two centres (the
+    // centre of a box symmetric about its point is that point, P), and the
+    // no-face values in the frame columns "touch" writes on every pair.
     for (const p of got) {
-      expect(p.lo).toEqual(p.P);
-      expect(p.hi).toEqual(p.P);
+      expect(p.lo).toEqual([0, 0, 0]);
+      expect(p.hi).toEqual([0, 0, 0]);
+      expect([p.outward, p.outAxis, p.alongAxis, p.alongSign]).toEqual([[0, 0, 0], -1, -1, 0]);
       const mid = [0, 1, 2].map((k) => f(0.5 * (f(qs[p.q].P![k]) + f(ts[p.t].P![k]))));
       for (let k = 0; k < 3; k++) expect(p.P[k]).toBeCloseTo(mid[k], 5);
     }
   });
 
-  it("one local side is enough to write no region, rotation or not", async () => {
+  it("two pure translations: the region and the face frame, in the QUERY's frame (the target's corners moved by P_t - P_q)", async () => {
+    // Two lots: the query at P = (10, 0, 5), the target at (11, 0, 5), both
+    // unit boxes from their P. The target's local [0, 1] is the query's [1, 2].
+    const q = cloud([{ lo: [0, 0, 0], hi: [1, 1, 1], P: [10, 0, 5] }]);
+    const t = cloud([{ lo: [0, 0, 0], hi: [1, 1, 1], P: [11, 0, 5] }]);
+    const { pairs } = await run(q, t, { mode: "touch" });
+    expect(readPairs(pairs)).toEqual([
+      { q: 0, t: 0, lo: [1, 0, 0], hi: [1, 1, 1], P: [10, 0, 5], outward: [1, 0, 0], outAxis: 0, alongAxis: 2, alongSign: -1 },
+    ]);
+    // The same wall seen from the target: in ITS frame, x = 0, facing -x.
+    const back = await run(t, q, { mode: "touch" });
+    expect(readPairs(back.pairs)).toEqual([
+      { q: 0, t: 0, lo: [0, 0, 0], hi: [0, 1, 1], P: [11, 0, 5], outward: [-1, 0, 0], outAxis: 0, alongAxis: 2, alongSign: 1 },
+    ]);
+  });
+
+  it("w = -1 is the identity rotation too: a pure translation, with its region", async () => {
+    const q = cloud([{ lo: [0, 0, 0], hi: [1, 1, 1], P: [10, 0, 5], rot: [0, 0, 0, -1] }]);
+    const t = cloud([{ lo: [0, 0, 0], hi: [1, 1, 1], P: [11, 0, 5] }]);
+    const [p] = readPairs((await run(q, t, { mode: "touch" })).pairs);
+    expect([p.lo, p.hi, p.outward]).toEqual([[1, 0, 0], [1, 1, 1], [1, 0, 0]]);
+  });
+
+  it("a rotation or a scale on either side writes no region: the midpoint, a zero box, the no-face values", async () => {
     const q = cloud([box([0, 0, 0], [1, 1, 1])]);
-    const t = cloud([{ lo: [0, 0, 0], hi: [1, 1, 1], P: [1, 0, 0] }]);
-    const { pairs } = await run(q, t, { mode: "touch", targetFrame: "local" });
-    expect(readPairs(pairs)).toEqual([{ q: 0, t: 0, lo: [1, 0.5, 0.5], hi: [1, 0.5, 0.5], P: [1, 0.5, 0.5] }]);
+    for (const t of [
+      { lo: [0, 0, 0], hi: [1, 1, 1], P: [1, 0, 0], scale: [1, 1, 2] },
+      { lo: [0, 0, 0], hi: [1, 1, 1], P: [2, 0, 1], rot: [0, 1, 0, 0] }, // a half turn: spans x [1, 2], z [0, 1]
+    ]) {
+      const { out, pairs } = await run(q, cloud([t]), { mode: "touch" });
+      expect(col(out, "contact")).toEqual([1]);
+      const [p] = readPairs(pairs);
+      expect([p.lo, p.hi, p.outward, p.outAxis]).toEqual([[0, 0, 0], [0, 0, 0], [0, 0, 0], -1]);
+      expect(col(pairs, "rot")).toEqual([0, 0, 0, 1]);
+      expect(col(pairs, "scale")).toEqual([1, 1, 1]);
+    }
+  });
+
+  it("one SHARED rotated, scaled frame: the region and the face frame are written in it, as unrotated", async () => {
+    // A 2x1 plan of rooms under one P, a quarter turn about y and scale 2:
+    // the shared wall is the plan's x = 4 in the rooms' own coordinates.
+    const tf = { P: [3, 1, -2], rot: [0, Math.SQRT1_2, 0, Math.SQRT1_2], scale: [2, 2, 2] };
+    const rooms = [box([0, 0, 0], [4, 3, 4]), box([4, 0, 0], [4, 3, 4])];
+    const plain = readPairs((await run(cloud(rooms), cloud(rooms), { mode: "touch", excludeSelf: true })).pairs);
+    const turned = await run(cloud(rooms.map((r) => ({ ...r, ...tf }))), cloud(rooms.map((r) => ({ ...r, ...tf }))), { mode: "touch", excludeSelf: true });
+    const got = readPairs(turned.pairs);
+    expect(got.map(({ P, ...rest }) => rest)).toEqual(plain.map(({ P, ...rest }) => rest));
+    for (const p of got) expect(p.P).toEqual(tf.P);
+    expect(col(turned.pairs, "rot")).toEqual([...tf.rot, ...tf.rot].map(f));
+    expect(col(turned.pairs, "scale")).toEqual([2, 2, 2, 2, 2, 2]);
+    expect(got[0]).toMatchObject({ lo: [4, 0, 0], hi: [4, 3, 4], outward: [1, 0, 0] });
   });
 });
 
@@ -612,14 +662,8 @@ describe("boxContact pairs: on demand", () => {
   function build(declarePairs: boolean): Graph {
     const g = new Graph(3);
     const grid = g.add(pointGrid, { countX: 3, countY: 1, countZ: 3, spacing: [2, 2, 2] }, "grid");
-    const rooms = g.add(
-      setBounds,
-      {
-        boundsMin: fieldFromJson({ fn: "position" }),
-        boundsMax: fieldFromJson({ fn: "add", args: [{ fn: "position" }, [2, 3, 2]] }),
-      },
-      "rooms",
-    );
+    // Constant LOCAL corners: each room's box sits at its point's P.
+    const rooms = g.add(setBounds, { boundsMin: [0, 0, 0], boundsMax: [2, 3, 2] }, "rooms");
     const probe = g.add(boxContact, { mode: "touch", excludeSelf: true, countAttr: "n" }, "probe");
     g.connect(grid, "out", rooms, "in");
     g.connect(rooms, "out", probe, "in");

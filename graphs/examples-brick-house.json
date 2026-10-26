@@ -5056,8 +5056,6 @@
                     }
                   ]
                 },
-                "queryFrame": "world",
-                "targetFrame": "world",
                 "excludeAttr": "",
                 "excludeSelf": false,
                 "hitAttr": "covered",

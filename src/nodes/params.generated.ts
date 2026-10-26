@@ -511,15 +511,15 @@ export interface BoxContactParams {
   mode: "overlap" | "touch" | "contain" | "inside";
   /**
    * How far the QUERY box is GROWN on BOTH sides along each of its own three axes before the
-   * test, in world units [x, y, z] (scale is not applied; for a "world" query the axes are
-   * the world's). 0 tests the box as it is. As a FIELD it is resolved per QUERY point — a
-   * scalar broadcasts to all three axes — so each query can reach as far as it needs. vec(0,
-   * 0, 2) on a wall running along x grows both its faces, the inside one too; to reach out
-   * of ONE face, use marginMin or marginMax instead. NEGATIVE shrinks the query: "inside"
-   * with a small negative margin tolerates a sliver of overhang, and "overlap" with one
-   * ignores a contact shallower than it. Adds to marginMin and marginMax. A query whose size
-   * after all three is below zero on any axis is EMPTY and meets nothing, in every mode.
-   * Must be finite.
+   * test, in the box's OWN units [x, y, z]: applied to the stored box before its point's
+   * transform, so a scale scales it (offsetBox's margin, with its meaning). 0 tests the box
+   * as it is. As a FIELD it is resolved per QUERY point — a scalar broadcasts to all three
+   * axes — so each query can reach as far as it needs. vec(0, 0, 2) on a wall running along
+   * x grows both its faces, the inside one too; to reach out of ONE face, use marginMin or
+   * marginMax instead. NEGATIVE shrinks the query: "inside" with a small negative margin
+   * tolerates a sliver of overhang, and "overlap" with one ignores a contact shallower than
+   * it. Adds to marginMin and marginMax. A query whose size after all three is below zero on
+   * any axis is EMPTY and meets nothing, in every mode. Must be finite.
    *
    * - Accepts a field.
    *
@@ -528,15 +528,16 @@ export interface BoxContactParams {
   margin: FieldParam;
   /**
    * How far the query box's MIN-SIDE face — the one its boundsMin corner is on, along each
-   * of its own axes — moves OUT before the test, in world units [x, y, z], on top of
-   * `margin`. Signed: positive reaches out of that face only, negative pulls it in, and with
-   * marginMax it can shift the box (marginMin -d, marginMax +d moves it d along the axis) or
-   * carve a probe out of it. A wall whose outside is -z looks two units out of its front,
-   * and not into the house, with marginMin vec(0, 0, 2). As a FIELD it is resolved per QUERY
-   * point and may read the query's box names: the window probe half a stud in front of a
-   * south wall, flattened onto the outside, is marginMin vec(0, 0, 0.5) with marginMax
-   * vec(0, 0, -0.5 - box("sz")), plus whatever pulls the sides in to the opening. For a
-   * "local" query the side is the box's own, before its scale's sign. Must be finite.
+   * of its own axes — moves OUT before the test, in the box's own units [x, y, z] (scaled
+   * with it), on top of `margin`. Signed: positive reaches out of that face only, negative
+   * pulls it in, and with marginMax it can shift the box (marginMin -d, marginMax +d moves
+   * it d along the axis) or carve a probe out of it. A wall whose outside is -z looks two
+   * units out of its front, and not into the house, with marginMin vec(0, 0, 2). As a FIELD
+   * it is resolved per QUERY point and may read the query's box names: the window probe half
+   * a stud in front of a south wall, flattened onto the outside, is marginMin vec(0, 0, 0.5)
+   * with marginMax vec(0, 0, -0.5 - box("sz")), plus whatever pulls the sides in to the
+   * opening. The side is the box's own, before its scale's sign: under a negative scale the
+   * boundsMin side is still the one this moves. Must be finite.
    *
    * - Accepts a field.
    *
@@ -545,39 +546,16 @@ export interface BoxContactParams {
   marginMin: FieldParam;
   /**
    * How far the query box's MAX-SIDE face — the one its boundsMax corner is on, along each
-   * of its own axes — moves OUT before the test, in world units [x, y, z], on top of
-   * `margin`. Signed, with the same readings as marginMin, mirrored: a wall whose outside is
-   * +z reaches out of its front with marginMax vec(0, 0, 2). As a FIELD it is resolved per
-   * QUERY point. Must be finite.
+   * of its own axes — moves OUT before the test, in the box's own units [x, y, z] (scaled
+   * with it), on top of `margin`. Signed, with the same readings as marginMin, mirrored: a
+   * wall whose outside is +z reaches out of its front with marginMax vec(0, 0, 2). As a
+   * FIELD it is resolved per QUERY point. Must be finite.
    *
    * - Accepts a field.
    *
    * @defaultValue `[0,0,0]`
    */
   marginMax: FieldParam;
-  /**
-   * How the QUERY points' boundsMin/boundsMax are read. "world" (the default): as world
-   * coordinates, P, rot and scale not read — the convention of setBounds, splitBox and
-   * packBricks, and so of every grammar cell. "local": in the point's own frame, placed by
-   * P, rot and scale exactly as spawnInstances places a mesh (world = P + rot * (scale *
-   * corner)); a rotated point is then tested as an ORIENTED box, exactly. Decided once per
-   * cook.
-   *
-   * - Enum: `"world"` | `"local"`
-   *
-   * @defaultValue `"world"`
-   */
-  queryFrame: "world" | "local";
-  /**
-   * How the TARGET points' boundsMin/boundsMax are read, with the same two choices as
-   * `queryFrame`, chosen independently: grammar cells ("world") can be queried against
-   * placed, rotated instances ("local"). Decided once per cook.
-   *
-   * - Enum: `"world"` | `"local"`
-   *
-   * @defaultValue `"world"`
-   */
-  targetFrame: "world" | "local";
   /**
    * OPT-IN: the name of a tuple-1 point attribute present on BOTH inputs; a target whose
    * value EQUALS the query's is skipped, as if absent. This is how a bay does not count its
@@ -620,12 +598,12 @@ export interface BoxContactParams {
   countAttr: string;
   /**
    * OPT-IN: name of the i32 point attribute (tuple 1) receiving the INDEX, in the targets
-   * input, of the met target whose box centre is nearest the centre of the query box AS
-   * TESTED (after its margins), ties — distances equal within a band scaled like the
-   * centres' rounding (see the node description), so a rotation's rounding cannot decide one
-   * — to the lowest index, or -1 when none was met. Feed it to transferByIndex as `index` to
-   * read that target's own attributes — its label, its id, its colour. A reporting slot on
-   * the same terms as hitAttr. Empty (the default) writes none.
+   * input, of the met target whose box's WORLD centre is nearest the world centre of the
+   * query box AS TESTED (after its margins), ties — distances equal within a band scaled
+   * like the centres' rounding (see the node description), so a rotation's rounding cannot
+   * decide one — to the lowest index, or -1 when none was met. Feed it to transferByIndex as
+   * `index` to read that target's own attributes — its label, its id, its colour. A
+   * reporting slot on the same terms as hitAttr. Empty (the default) writes none.
    *
    * @defaultValue `""`
    */
@@ -653,21 +631,23 @@ export interface BoxContactParams {
    */
   pairTargetAttr: string;
   /**
-   * Written under "touch" with both frames "world" only: name of the f32 tuple-3 point
-   * attribute on the `pairs` output receiving the QUERY's outward face normal toward the
-   * target when the two meet across exactly one face — one signed axis, [0, 0, 1] when the
-   * target lies on the query's +z side — and [0, 0, 0] for an edge or corner contact or
-   * boxes that cross. shellSplit's `outwardAttr` default and meaning, so placeBox and
-   * offsetBox read it in their "face" frame. Empty writes none.
+   * Written under "touch", on every pair (a pair with no region, or not across one face,
+   * gets the no-face value): name of the f32 tuple-3 point attribute on the `pairs` output
+   * receiving the QUERY's outward face normal toward the target when the two meet across
+   * exactly one face — one signed axis, [0, 0, 1] when the target lies on the query's +z
+   * side — and [0, 0, 0] for an edge or corner contact or boxes that cross. shellSplit's
+   * `outwardAttr` default and meaning, so placeBox and offsetBox read it in their "face"
+   * frame. Empty writes none.
    *
    * @defaultValue `"outward"`
    */
   pairOutwardAttr: string;
   /**
-   * Written under "touch" with both frames "world" only: name of the i32 point attribute on
-   * the `pairs` output receiving the axis the two boxes touch across, 0 = x, 1 = y, 2 = z —
-   * the axis the shared region is flat on — or -1 when they do not meet across exactly one
-   * face. shellSplit's `outAxisAttr` default: 1 is a floor or a ceiling, so a filter on
+   * Written under "touch", on every pair (a pair with no region, or not across one face,
+   * gets the no-face value): name of the i32 point attribute on the `pairs` output receiving
+   * the axis the two boxes touch across, 0 = x, 1 = y, 2 = z — the axis the shared region is
+   * flat on — or -1 when they do not meet across exactly one face. shellSplit's
+   * `outAxisAttr` default: 1 is a floor or a ceiling, so a filter on
    * ne(attribute("outAxis"), 1) * ge(attribute("outAxis"), 0) keeps the walls. Empty writes
    * none.
    *
@@ -675,21 +655,22 @@ export interface BoxContactParams {
    */
   pairOutAxisAttr: string;
   /**
-   * Written under "touch" with both frames "world" only: name of the i32 point attribute on
-   * the `pairs` output receiving the shared face's ALONG axis as shellSplit writes it on a
-   * face of that orientation — x for a face across z, a floor or a ceiling; z for a face
-   * across x — or -1 with no single face. With pairAlongSignAttr and pairOutwardAttr it is
-   * the frame placeBox's "face" frame reads. Empty writes none.
+   * Written under "touch", on every pair (a pair with no region, or not across one face,
+   * gets the no-face value): name of the i32 point attribute on the `pairs` output receiving
+   * the shared face's ALONG axis as shellSplit writes it on a face of that orientation — x
+   * for a face across z, a floor or a ceiling; z for a face across x — or -1 with no single
+   * face. With pairAlongSignAttr and pairOutwardAttr it is the frame placeBox's "face" frame
+   * reads. Empty writes none.
    *
    * @defaultValue `"alongAxis"`
    */
   pairAlongAxisAttr: string;
   /**
-   * Written under "touch" with both frames "world" only: name of the i32 point attribute on
-   * the `pairs` output receiving the sign along runs, +1 or -1, as shellSplit writes it so
-   * that along x up = the query's outward — left to right as seen from the TARGET's side of
-   * the shared face, looking back at the query — or 0 with no single face. Empty writes
-   * none.
+   * Written under "touch", on every pair (a pair with no region, or not across one face,
+   * gets the no-face value): name of the i32 point attribute on the `pairs` output receiving
+   * the sign along runs, +1 or -1, as shellSplit writes it so that along x up = the query's
+   * outward — left to right as seen from the TARGET's side of the shared face, looking back
+   * at the query — or 0 with no single face. Empty writes none.
    *
    * @defaultValue `"alongSign"`
    */
