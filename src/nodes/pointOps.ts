@@ -24,6 +24,7 @@ import { hashCombine, hashFloat } from "../random/index.js";
 import { standardNode } from "./registry.js";
 import { isField, type Column } from "../fields/index.js";
 import { canonicalOneOf } from "../diagnostics/canonical.js";
+import { boundsFrameFault, refuseBoundsFrameFault } from "./boundsFrame.js";
 import {
   ORIENT_AXES,
   type FieldParam,
@@ -120,8 +121,14 @@ export const transformPoints = standardNode<
   // geometry in/out); the resolver's planner ports the SRT loop —
   // including the conditional rot/scale composition — as an apply
   // kernel and falls back per-node for layouts it does not model.
-  resident: { kind: "transformPoints" },
+  resident: {
+    kind: "transformPoints",
+    // A translate that moves P onto a box position is refused by execute;
+    // a fused run would otherwise cook it (see boundsFrame.ts).
+    eligible: (p) => boundsFrameFault("transformPoints", p as unknown as Readonly<Record<string, unknown>>) === undefined,
+  },
   async execute({ inputs, params, seed, gpu }) {
+    refuseBoundsFrameFault("transformPoints", params as unknown as Readonly<Record<string, unknown>>);
     const geo = deriveGeometry(requireGeometry(inputs, "in", "transformPoints"));
     const n = geo.pointCount;
     const tCol = requireTuple(await resolveOnMaybeGpu(gpu, geo, "point", params.translate, seed, "transformPoints", "translate"), [1, 3], "transformPoints", "translate");
@@ -2018,6 +2025,10 @@ export const setBounds = standardNode<SetBoundsParams, SetBoundsInputs, SetBound
         `setBounds: param "size" is set (${isField(params.size) ? "a field" : JSON.stringify(params.size)}), but "anchor" is "corners", which writes boundsMin/boundsMax as given and never reads it. To size a box about each point's P, set "anchor" to "center", "baseCenter" (min y at P) or "min" (min corner at P); otherwise remove "size" (its default is [1, 1, 1]).`,
       );
     }
+    // A corner that is position() plus an offset is the old world-box
+    // idiom, and now counts P twice: refused by the shape of the
+    // expression, before anything resolves (see boundsFrame.ts).
+    refuseBoundsFrameFault("setBounds", params as unknown as Readonly<Record<string, unknown>>);
 
     const geo = deriveGeometry(requireGeometry(inputs, "in", "setBounds"));
     const set = geo.attrs.point;

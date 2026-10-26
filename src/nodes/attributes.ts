@@ -21,6 +21,7 @@ import { isField, type Column } from "../fields/index.js";
 import { makeGeometryItem, type DataItem } from "../graph/index.js";
 import { hashCombine } from "../random/index.js";
 import { standardNode } from "./registry.js";
+import { boundsFrameFault, refuseBoundsFrameFault } from "./boundsFrame.js";
 import {
   type FieldParam,
   gatherPoints,
@@ -346,9 +347,16 @@ export const setAttribute = standardNode<
       p.values.length === 0 &&
       p.stringValue === "" &&
       p.weights.length === 0 &&
-      p.select === 0,
+      p.select === 0 &&
+      // A refusal the per-node path raises must not be skipped by a fused
+      // run (see boundsFrame.ts).
+      boundsFrameFault("setAttribute", p as unknown as Readonly<Record<string, unknown>>) === undefined,
   },
   async execute({ inputs, params, seed: nodeSeed, gpu }) {
+    // P from a box position, or a box corner that is position() plus an
+    // offset: both mix the point's own frame with the world, and are
+    // refused by the shape of the expression (see boundsFrame.ts).
+    refuseBoundsFrameFault("setAttribute", params as unknown as Readonly<Record<string, unknown>>);
     const geo = deriveGeometry(requireGeometry(inputs, "in", "setAttribute"));
     const domain = params.domain as Domain;
     const type = params.type as AttrType;

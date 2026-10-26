@@ -92,6 +92,12 @@ export const DIAGNOSTIC_CODES = Object.freeze({
   "stranded-graph-param-value": "A body holds a constant that looks derived from a declared graph param's value, so changing the param will not move it.",
   "asset-output-unused": "An asset output names an id no spawnInstances can emit.",
 
+  // Box frames: a box is an extent in its point's own frame.
+  "box-corner-counts-position":
+    "A box corner is written as position() plus an offset; bounds are already relative to P, so the point's transform counts P twice.",
+  "position-from-local-box":
+    "P is set from a box corner or centre with no position() term; box positions are offsets from P, not world positions (pivotBox moves P into its box).",
+
   // Cook.
   "node-execution-failed": "A node's execute threw during a cook.",
   "attribute-not-found": "A node or field read an attribute the geometry does not carry on that domain.",

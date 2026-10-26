@@ -13,6 +13,8 @@ import {
   component,
   constant,
   evaluateField,
+  index,
+  mul,
   position,
   randomField,
   vec,
@@ -1859,8 +1861,10 @@ describe("setBounds", () => {
 
   it("takes a per-point corner as a field, which one constant cannot say", async () => {
     // Each point gets the box IT asks for: the corner is read from the
-    // point's own position, so the two points end up with different
-    // extents in a single cook.
+    // point's own index, so the two points end up with different extents
+    // in a single cook. (Not from its position: a corner is already
+    // relative to P, so a corner that is position() plus an offset counts
+    // P twice and is refused — see boundsFrame.test.ts.)
     const input = cloudAt([
       [0, 0, 0],
       [2, 0, 0],
@@ -1869,7 +1873,7 @@ describe("setBounds", () => {
       (
         await runNode(
           setBounds,
-          { boundsMin: vec(0, 0, 0), boundsMax: vec(component(position(), 0), 1, 1) },
+          { boundsMin: vec(0, 0, 0), boundsMax: vec(mul(index(), 2), 1, 1) },
           { in: [makeGeometryItem(input)] },
         )
       ).out,

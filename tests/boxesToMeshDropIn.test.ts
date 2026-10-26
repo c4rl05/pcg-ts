@@ -42,7 +42,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { cook, deserializeGraph } from "../src/index.js";
+import { checkSerializedGraph, cook, deserializeGraph, diagnosticsOf } from "../src/index.js";
 import type { Geometry } from "../src/data/index.js";
 import type { DataCollection } from "../src/graph/index.js";
 
@@ -278,19 +278,22 @@ describe("boxesToMesh against basics-split-box's cell-to-instance tail, pivotBox
     expect(maxUlps).toBeGreaterThan(100);
   });
 
-  it("the frozen idiom, run as it stands, now counts P twice: its world corners land 2P out", async () => {
-    // The reason the sides above start from local blocks. The middle block
-    // sits at P = 0, so it is the outer two that move.
+  it("the frozen idiom, run as it stands, is refused: its corners and its P = box(\"center\") count P twice", async () => {
+    // The reason the sides above start from local blocks. Run as it
+    // stands, its world corners would land 2P out (the east block's box,
+    // which runs to 8 + 4, read twice through P to 2 * 8 + 4) — so it is
+    // refused instead, at validate and at cook, naming the nodes.
     const g = load();
-    g.nodes = g.nodes.filter((n) => !["centre", "size", "tint", "unitBox", "panels"].includes(n.id as string));
-    g.connections = g.connections.filter((c) => !["centre", "size", "tint", "panels"].includes(c.to[0]));
-    g.nodes.push({ id: "panels", type: "boxesToMesh", params: {} });
-    g.connections.push({ from: ["jambs", "out"], to: ["panels", "in"] });
-    g.outputs = [{ id: "panels", pin: "out", name: "panels" }];
-    const p = geo((await cook(deserializeGraph(g))).outputs.panels).attrs.point.require("P").data;
-    let xMax = -Infinity;
-    for (let i = 0; i < p.length; i += 3) xMax = Math.max(xMax, p[i]);
-    // The east block's box runs to 8 + 4; read twice through P, to 2 * 8 + 4.
-    expect(xMax).toBe(20);
+    const report = checkSerializedGraph(g);
+    expect(report.errors.map((r) => [r.code, r.nodeId, r.param])).toEqual([
+      ["box-corner-counts-position", "blocks", "boundsMin"],
+      ["box-corner-counts-position", "blocks", "boundsMax"],
+      ["position-from-local-box", "centre", "value"],
+    ]);
+    const err: unknown = await cook(deserializeGraph(g)).then(
+      () => undefined,
+      (e: unknown) => e,
+    );
+    expect(diagnosticsOf(err)[0]).toMatchObject({ code: "box-corner-counts-position", nodeId: "blocks" });
   });
 });

@@ -383,7 +383,7 @@ describe("shellSplit: frames", () => {
       seed: 7,
       nodes: [
         { id: "pts", type: "pointLine", params: { mode: "endpoints", count: 2, start: [0, 0, 0], end: [23, 1, -17] } },
-        { id: "box", type: "setBounds", params: { boundsMin: F("position()"), boundsMax: F("position() + vec(12, 3, 8)") } },
+        { id: "box", type: "setBounds", params: { anchor: "min", size: [12, 3, 8] } },
         { id: "shell", type: "shellSplit", params: { thickness: [T] } },
         {
           id: "bays",
@@ -441,7 +441,7 @@ describe("shellSplit: frames", () => {
     const res = await cook(deserializeGraph(JSON.parse(JSON.stringify(graph))));
     const sh = firstGeo(res.outputs.shell);
     const out = firstGeo(res.outputs.result);
-    // The walls, keyed by cell (its box's min corner) and face.
+    // The walls, keyed by cell (its P and its box's min corner) and face.
     const shBoxes = boxes(sh);
     const shFace = col(sh, "face");
     const wallOf = (lo: number[], face: number): Box =>
@@ -450,6 +450,9 @@ describe("shellSplit: frames", () => {
     const faces = col(out, "face");
     const n = col(out, "outward");
     const tLeft = col(out, "tLeft");
+    // Each cell's box is its own extent about its P, and the two cells
+    // here have the same one, so a wall is keyed by its cell's P as well.
+    const P = col(out, "P");
     const perWall = new Map<string, { label: string; t: number }[]>();
     let openings = 0;
     boxes(out).forEach(([a, b], i) => {
@@ -464,7 +467,7 @@ describe("shellSplit: frames", () => {
       const half = [0, 1, 2].reduce((s, k) => s + ((wall[1][k] - wall[0][k]) / 2) * Math.abs(right[k]), 0);
       const tViewer = (lateral + half) / (2 * half);
       expect(Math.abs(tViewer - tLeft[i])).toBeLessThan(1e-4);
-      const key = `${wall[0].join(",")}:${faces[i]}`;
+      const key = `${P.slice(i * 3, i * 3 + 3).join(",")}|${wall[0].join(",")}:${faces[i]}`;
       perWall.set(key, [...(perWall.get(key) ?? []), { label: labels[i], t: tViewer }]);
     });
     expect(openings).toBe(36);
@@ -932,8 +935,8 @@ describe("shellSplit: seeds and determinism", () => {
         g.add(
           setBounds,
           {
-            boundsMin: fieldFromJson({ fn: "position" }),
-            boundsMax: fieldFromJson({ fn: "add", args: [{ fn: "position" }, [8, 6, 4]] }),
+            anchor: "min",
+            size: [8, 6, 4],
           },
           "box",
         ),

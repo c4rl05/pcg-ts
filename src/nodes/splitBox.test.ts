@@ -843,11 +843,8 @@ describe('splitBox: axis "longest"', () => {
       const box = g.add(
         setBounds,
         {
-          boundsMin: fieldFromJson({ fn: "position" }),
-          boundsMax: fieldFromJson({
-            fn: "add",
-            args: [{ fn: "position" }, { fn: "vec", args: [{ fn: "add", args: [1, { fn: "mul", args: [{ fn: "randomField", key: "w" }, 4] }] }, 2, { fn: "add", args: [1, { fn: "mul", args: [{ fn: "randomField", key: "d" }, 4] }] }] }],
-          }),
+          anchor: "min",
+          size: fieldFromJson({ fn: "vec", args: [{ fn: "add", args: [1, { fn: "mul", args: [{ fn: "randomField", key: "w" }, 4] }] }, 2, { fn: "add", args: [1, { fn: "mul", args: [{ fn: "randomField", key: "d" }, 4] }] }] }),
         },
         "box",
       );
@@ -1044,8 +1041,8 @@ describe("splitBox: seeds and determinism", () => {
         g.add(
           setBounds,
           {
-            boundsMin: fieldFromJson({ fn: "position" }),
-            boundsMax: fieldFromJson({ fn: "add", args: [{ fn: "position" }, [4, 3, 4]] }),
+            anchor: "min",
+            size: [4, 3, 4],
           },
           "box",
         ),
@@ -1401,7 +1398,7 @@ describe("splitBox: direction", () => {
     const grid = g.add(pointGrid, { countX: 2, countY: 1, countZ: 1, spacing: [5, 5, 5] }, "grid");
     const box = g.add(
       setBounds,
-      { boundsMin: fieldFromJson({ fn: "position" }), boundsMax: fieldFromJson({ fn: "add", args: [{ fn: "position" }, [4, 3, 4]] }) },
+      { anchor: "min", size: [4, 3, 4] },
       "box",
     );
     const cut = g.add(splitBox, { labels: ["a", "b"], sizes: [1, 3], units: ["relative", "relative"] }, "cut");

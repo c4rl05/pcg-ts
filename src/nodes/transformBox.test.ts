@@ -505,8 +505,8 @@ describe("transformBox: determinism and JSON", () => {
         g.add(
           setBounds,
           {
-            boundsMin: fieldFromJson({ fn: "position" }),
-            boundsMax: fieldFromJson({ fn: "add", args: [{ fn: "position" }, [8, 6, 4]] }),
+            anchor: "min",
+            size: [8, 6, 4],
           },
           "box",
         ),

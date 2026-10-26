@@ -41,6 +41,12 @@
  *   once, instead of one `node-unreachable` per node.
  * - `stranded-graph-param-value` (warning): {@link strandedGraphParamValues},
  *   folded in so one call answers "is this graph sound".
+ * - `box-corner-counts-position` and `position-from-local-box` (errors):
+ *   a setBounds, setAttribute or transformPoints whose field mixes a box
+ *   with the world — a corner written as position() plus an offset, or a P
+ *   set from a box position — which that node's execute refuses
+ *   ({@link boundsFrameFaults}). Judged on the field's own expression, so
+ *   this is the cook's refusal, seen before the cook.
  * - `asset-output-unused` (warning): a top-level output declared
  *   `role: "asset"` names an id no `spawnInstances` can emit, so the mesh
  *   it supplies is never drawn. Reported only when EVERY spawner's id set
@@ -76,6 +82,7 @@ import {
   analyzeStarvation,
   starvedPinKeys,
 } from "../graph/subgraph.js";
+import { boundsFrameFaults } from "./boundsFrame.js";
 import { describeGraphAssets, describeSuppliedAssets } from "./graphAssets.js";
 import { type StrandedGraphParamValue, strandedGraphParamValues } from "./graphParams.js";
 import { subgraphRefOf } from "./subgraphRefs.js";
@@ -226,6 +233,19 @@ function diagnoseLevel(
         pin: pin.name,
         expected: `a connection from ${outputPhrase(pin)}`,
         fix,
+      });
+    }
+    // The refusal the node's own execute raises, reported before a cook
+    // does: a box mixed with the world (see boundsFrame.ts).
+    for (const frame of boundsFrameFaults(type, state.params)) {
+      out.push({
+        code: frame.code,
+        severity: "error",
+        message: `${nodeLabel(state.id, type, prefix)}: ${frame.message}`,
+        nodeId: state.id,
+        nodePath,
+        param: frame.param,
+        expected: frame.expected,
       });
     }
     const spec = getSubgraphSpec(state.def);

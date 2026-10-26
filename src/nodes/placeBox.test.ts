@@ -372,7 +372,7 @@ describe("placeBox: rotated cells, carried attributes and seeds", () => {
   it("drops in for the setBounds it replaces, byte for byte", async () => {
     const r = await runNode(pointGrid, { countX: 3, countY: 1, countZ: 2, spacing: [2, 2, 2] }, {});
     const grid = firstGeo(r.out);
-    const sb = await runNode(setBounds, { boundsMin: f("position() - vec(1, 0.5, 1)"), boundsMax: f("position() + vec(1, 3.5, 1)") }, { in: [makeGeometryItem(grid)] });
+    const sb = await runNode(setBounds, { boundsMin: [-1, -0.5, -1], boundsMax: [1, 3.5, 1] }, { in: [makeGeometryItem(grid)] });
     const parents = firstGeo(sb.out);
     // Hand-spelled: a 0.5 x 1 x 0.5 box on each cell's floor, 0.25 in from its max x.
     const spelled = await runNode(
@@ -676,7 +676,7 @@ describe("placeBox: determinism and the serialized format", () => {
     const g = new Graph(41);
     const add = {
       grid: () => g.add(pointGrid, { countX: 4, countY: 1, countZ: 3, spacing: [10, 10, 10] }, "grid"),
-      box: () => g.add(setBounds, { boundsMin: f("position()"), boundsMax: f("position() + vec(8, 6, 4)") }, "box"),
+      box: () => g.add(setBounds, { anchor: "min", size: [8, 6, 4] }, "box"),
       shell: () => g.add(shellSplit, { faces: ["south", "north", "west", "east"], labels: ["wall", "wall", "wall", "wall"], thickness: [1] }, "shell"),
       trim: () =>
         g.add(
