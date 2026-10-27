@@ -196,7 +196,7 @@ describe("refused: P set from a box position", () => {
         '(box("lo"), box("center"), attribute("boundsMin"), ...) are offsets FROM P, not world positions, and P would land ' +
         "at the offset as if it were a place. To move each point into its box, use pivotBox with pivot [0.5, 1, 0.5]: 1 on " +
         "axis y is the max corner, the point this reads. pivotBox moves P on every axis, so it moves x and z too, to the " +
-        "box's centre there (0.5, where P already is when the box is centred on it); set their pivot to where P should sit " +
+        "box's centre there (pivot 0.5); set their pivot to where P should sit " +
         "(0 the min corner, 1 the max). pivotBox moves P to that point and re-expresses the box about it, so the world box " +
         'stays where it was. For instances, follow it with setAttribute "scale" = mul(attribute("scale", 3), box("size")) ' +
         "and setBounds [-0.5, -0.5, -0.5]..[0.5, 0.5, 0.5]; a world-space fact about a box is read after pivotBox as position().",

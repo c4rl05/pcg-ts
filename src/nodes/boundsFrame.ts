@@ -592,9 +592,8 @@ function pivotFix(reads: readonly PlaceRead[]): { readonly pivot: string; readon
   const others =
     unread.length === 0
       ? ""
-      : ` pivotBox moves P on every axis, so it moves ${axisList(unread)} too, to the box's centre there (0.5, where P ` +
-        `already is when the box is centred on it); set ${unread.length === 1 ? "that axis'" : "their"} pivot to where P ` +
-        `should sit (0 the min corner, 1 the max).`;
+      : ` pivotBox moves P on every axis, so it moves ${axisList(unread)} too, to the box's centre there (pivot 0.5); ` +
+        `set ${unread.length === 1 ? "that axis'" : "their"} pivot to where P should sit (0 the min corner, 1 the max).`;
   return {
     pivot: vec,
     fix:
