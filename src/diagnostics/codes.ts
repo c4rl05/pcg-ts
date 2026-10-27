@@ -96,7 +96,7 @@ export const DIAGNOSTIC_CODES = Object.freeze({
   "box-corner-counts-position":
     "A box corner is written as position() plus an offset; bounds are already relative to P, so the point's transform counts P twice.",
   "position-from-local-box":
-    "P is set from a box corner or centre with no position() term; box positions are offsets from P, not world positions (pivotBox moves P into its box).",
+    "P is set from a box corner or centre taken as a place (a positive box-position term and no position() term); box positions are offsets from P, not world positions (pivotBox moves P into its box).",
 
   // Cook.
   "node-execution-failed": "A node's execute threw during a cook.",

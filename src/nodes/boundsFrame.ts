@@ -11,11 +11,13 @@
  *   `boundsMax = position() + size / 2` — was the way to put a box at a
  *   point. Now the point's transform adds P to the corners a second time,
  *   and the box lands at twice P. Refused as `box-corner-counts-position`.
- * - P set FROM a box position — `P = box("center")`, or `translate =
- *   box("center") - position()` — was the cell-to-instance hand-off. Now a
- *   box position is an offset FROM P, so P receives an offset as if it were
- *   a place. Refused as `position-from-local-box`; `pivotBox` is the
- *   hand-off.
+ * - P set FROM a box position — `P = box("center")`, `P.y = box("y1")`,
+ *   or `translate = box("center") - position()` — was the cell-to-instance
+ *   hand-off. Now a box position is an offset FROM P, so P receives an
+ *   offset as if it were a place. Refused as `position-from-local-box`;
+ *   `pivotBox` is the hand-off, and the refusal names the pivot that reads
+ *   the same point of the box (1 on an axis read at its max corner, 0 at
+ *   its min, 0.5 at the centre).
  *
  * WHAT IS MEASURED. Each expression is read as an AFFINE function of two
  * hidden vectors, per output component: P (`position()`, `attribute("P")`)
@@ -59,14 +61,21 @@
  *   the two together. -1 and 0.5 are not refused either (reaching a
  *   plane; a size that grows with height);
  * - a new P_i with no P term at all (coefficient 0 on every P component)
- *   that still carries O is a box position used as a world position. A
+ *   and a POSITIVE coefficient on O_i is a box position used as a world
+ *   position. A NEGATIVE one is not refused: `P.y = -box("y0")`, or
+ *   `k - box("y0")`, rests the box's floor on the plane y = k (world floor
+ *   = P.y + y0 = k), right for every P under an identity rotation and
+ *   scale. Nor is a P_i that reads the box only on another axis (no O_i
+ *   term): that is not the old idiom, and pivotBox would not fix it. A
  *   SIZE written into P (`index() * box("sx")`) carries no O and is not
  *   refused: a length is the same in every frame.
  *
  * EVER CORRECT? A box translating rigidly with P is right only when the
  * graph zeroes P afterwards, baking P into the box; nothing in the library
  * needs that and it is refused all the same. A P set from a box position
- * is right only where P is already 0 on that axis with the transform the
+ * taken as a place (a positive coefficient; a negative one rests a face
+ * on a plane and cooks) is right only where P is already 0 on that axis
+ * with the transform the
  * identity there, and the box is overwritten after it — the old instance
  * tail's exact conditions, a ground-plane scatter's y among them — and
  * there `position() + box(...)` is the same number, while `pivotBox` does
@@ -94,10 +103,20 @@ import {
   specChildEntries,
 } from "../fields/spec.js";
 
+type Vec3 = readonly [number, number, number];
+
 /** One output component: its coefficients on P and on O, and its literal value when it is one. */
 interface Row {
-  readonly p: readonly [number, number, number];
-  readonly o: readonly [number, number, number];
+  readonly p: Vec3;
+  readonly o: Vec3;
+  /**
+   * The part of `o` that comes through the MAX corner (`boundsMax`); the
+   * rest, `o - hi`, comes through the min corner. Null where branches that
+   * agree on `o` split it differently. It decides nothing: it is what the
+   * pivot hint reads, `hi_i / o_i` being 1 for `y1`, 0 for `y0` and 0.5
+   * for the centre.
+   */
+  readonly hi: Vec3 | null;
   /** The component's value when the expression is a literal there. */
   readonly k?: number;
   /** A vector attribute reaches it, which may hold a place; never judged. */
@@ -127,11 +146,11 @@ type Reading = {
 } | null;
 
 const Z3 = [0, 0, 0] as const;
-const ZERO: Row = { p: Z3, o: Z3 };
+const ZERO: Row = { p: Z3, o: Z3, hi: Z3 };
 const AXES = ["x", "y", "z"] as const;
 
 function lit(k: number): Row {
-  return { p: Z3, o: Z3, k };
+  return { p: Z3, o: Z3, hi: Z3, k };
 }
 
 function unit(axis: number): [number, number, number] {
@@ -169,18 +188,21 @@ function lin(
 ): Row {
   const p: [number, number, number] = [0, 0, 0];
   const o: [number, number, number] = [0, 0, 0];
+  const splitKnown = (fa === 0 || a.hi !== null) && (fb === 0 || b.hi !== null);
+  const hi: [number, number, number] | null = splitKnown ? [0, 0, 0] : null;
   for (let i = 0; i < 3; i++) {
     p[i] = fa * a.p[i]! + fb * b.p[i]!;
     o[i] = fa * a.o[i]! + fb * b.o[i]!;
+    if (hi !== null) hi[i] = (fa === 0 ? 0 : fa * a.hi![i]!) + (fb === 0 ? 0 : fb * b.hi![i]!);
   }
   const foreign = (fa !== 0 && a.foreign === true) || (fb !== 0 && b.foreign === true);
   const k = a.k !== undefined && b.k !== undefined ? fa * a.k + fb * b.k : undefined;
-  return { p, o, ...(k !== undefined ? { k } : {}), ...(foreign ? { foreign: true as const } : {}) };
+  return { p, o, hi, ...(k !== undefined ? { k } : {}), ...(foreign ? { foreign: true as const } : {}) };
 }
 
 /** A flat, non-literal row, tainted when any of `from` is. */
 function zeroFrom(...from: readonly Row[]): Row {
-  return from.some((r) => r.foreign === true) ? { p: Z3, o: Z3, foreign: true } : ZERO;
+  return from.some((r) => r.foreign === true) ? { ...ZERO, foreign: true } : ZERO;
 }
 
 function scaled(a: Row, f: number): Row {
@@ -237,7 +259,9 @@ function agree(rows: readonly Row[]): Row | null {
   if (!rows.every((r) => same(r, first))) return null;
   const foreign = rows.some((r) => r.foreign === true);
   const k = rows.every((r) => r.k === first.k) ? first.k : undefined;
-  return { p: first.p, o: first.o, ...(k !== undefined ? { k } : {}), ...(foreign ? { foreign: true as const } : {}) };
+  const h = first.hi;
+  const hi = h !== null && rows.every((r) => r.hi !== null && r.hi.every((c, i) => c === h[i])) ? h : null;
+  return { p: first.p, o: first.o, hi, ...(k !== undefined ? { k } : {}), ...(foreign ? { foreign: true as const } : {}) };
 }
 
 /** Fns whose value does not move with P or O: a comparison, a hash, an index. */
@@ -284,16 +308,17 @@ function read(spec: unknown, scope: Scope): Reading {
     case "constant":
       return literalReading(node.value);
     case "position":
-      return { rows: [0, 1, 2].map((a) => ({ p: unit(a), o: Z3 })) };
+      return { rows: [0, 1, 2].map((a) => ({ p: unit(a), o: Z3, hi: Z3 })) };
     case "attribute": {
       const name = node.name;
       if (name === "P") return read({ fn: "position" }, scope);
       if (name === BOX_MIN_ATTR || name === BOX_MAX_ATTR) {
-        return { rows: [0, 1, 2].map((a) => ({ p: Z3, o: unit(a) })) };
+        const max = name === BOX_MAX_ATTR;
+        return { rows: [0, 1, 2].map((a) => ({ p: Z3, o: unit(a), hi: max ? unit(a) : Z3 })) };
       }
       const ts = node.tupleSize;
       if (typeof ts === "number" && Number.isInteger(ts) && ts >= 1) {
-        const row: Row = ts === 1 ? ZERO : { p: Z3, o: Z3, foreign: true };
+        const row: Row = ts === 1 ? ZERO : { ...ZERO, foreign: true };
         return { rows: Array.from({ length: ts }, () => row) };
       }
       return { rows: [ZERO], assumed: true, vectorish: true };
@@ -473,24 +498,110 @@ function cornerPairAxes(min: Reading, max: Reading): number[] {
   return lo.filter((a) => hi.has(a));
 }
 
-/** The axes on which a new P carries a box position and no P at all. */
-function pFromBox(v: Reading, addP: boolean): number[] {
-  return axesWhere(v, (row, i) => {
+/** One axis a new P takes a box position on as a place, and the pivot that reads the same point of the box. */
+interface PlaceRead {
+  readonly axis: number;
+  /** `hi_i / o_i`: 1 for the max corner, 0 for the min, 0.5 for the centre; undefined where the split is unknown. */
+  readonly pivot: number | undefined;
+  /** `o_i`: 1 when P is exactly a point of the box on that axis. */
+  readonly scale: number;
+}
+
+/** Below this an O coefficient is float residue (0.1 y0 + 0.2 y0 - 0.3 y0), not a box position. */
+const COEFF_EPS = 1e-9;
+
+function round6(v: number): number {
+  return Math.round(v * 1e6) / 1e6 + 0;
+}
+
+/**
+ * The axes on which a new P has no P term and a POSITIVE coefficient on
+ * that axis' box position: a box position taken as a place, the old
+ * `P.y = box("y1")`. A negative one is not that: `k - box("y0")` rests the
+ * box's floor on the plane y = k (world floor = P.y + y0 = k), right for
+ * every P under an identity rotation and scale. Under `addP` the reading is
+ * a transformPoints translate, so P' = P + translate is what is judged.
+ */
+function pFromBox(v: Reading, addP: boolean): PlaceRead[] {
+  const out: PlaceRead[] = [];
+  for (const axis of axesWhere(v, (row, i) => {
     if (row.foreign === true) return false;
-    const p = addP ? lin(row, { p: unit(i), o: Z3 }, 1, 1).p : row.p;
-    return p.every((c) => c === 0) && row.o.some((c) => c !== 0);
-  });
+    const p = addP ? lin(row, { p: unit(i), o: Z3, hi: Z3 }, 1, 1).p : row.p;
+    return p.every((c) => c === 0) && row.o[i]! > COEFF_EPS;
+  })) {
+    const row = rowAt(v!, axis)!;
+    const pivot = row.hi === null ? undefined : round6(row.hi[axis]! / row.o[axis]!);
+    out.push({ axis, pivot, scale: row.o[axis]! });
+  }
+  return out;
+}
+
+function listOf(names: readonly string[]): string {
+  return names.length === 1 ? names[0]! : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
 function axisList(axes: readonly number[]): string {
-  const names = axes.map((a) => AXES[a]!);
-  return names.length === 1 ? names[0]! : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return listOf(axes.map((a) => AXES[a]!));
 }
 
 const FRAME = "a box is an extent in its point's OWN frame (world = P + rot * (scale * x); [0, 0, 0] is the point)";
 
-const PIVOT_FIX =
-  'To move each point into its box, use pivotBox (pivot [0.5, 0.5, 0.5] is the centre, [0.5, 0, 0.5] the base): it moves P there and re-expresses the box about it, so the world box stays where it was. For instances, follow it with setAttribute "scale" = mul(attribute("scale", 3), box("size")) and setBounds [-0.5, -0.5, -0.5]..[0.5, 0.5, 0.5]; a world-space fact about a box is read after pivotBox as position()';
+const INSTANCE_TAIL =
+  'For instances, follow it with setAttribute "scale" = mul(attribute("scale", 3), box("size")) and setBounds [-0.5, -0.5, -0.5]..[0.5, 0.5, 0.5]; a world-space fact about a box is read after pivotBox as position()';
+
+/** What a pivot value names along one axis of the box. */
+function pivotPoint(v: number): string {
+  if (v === 0) return "the min corner";
+  if (v === 1) return "the max corner";
+  if (v === 0.5) return "the centre";
+  return `${v} of the way from the min corner to the max`;
+}
+
+/** The pivot the graph needs, as a vec3, and the sentences that say why. */
+function pivotFix(reads: readonly PlaceRead[]): { readonly pivot: string; readonly fix: string } {
+  const pivot = [0.5, 0.5, 0.5];
+  for (const r of reads) if (r.pivot !== undefined) pivot[r.axis] = r.pivot;
+  const vec = `[${pivot.join(", ")}]`;
+  // The axes whose point is known, grouped by the value they take, in axis order.
+  const groups = new Map<number, number[]>();
+  for (const r of reads) {
+    if (r.pivot === undefined) continue;
+    groups.set(r.pivot, [...(groups.get(r.pivot) ?? []), r.axis]);
+  }
+  const known = [...groups].map(
+    ([v, axes]) => `${v} on ${axes.length === 1 ? "axis" : "axes"} ${axisList(axes)} is ${pivotPoint(v)}`,
+  );
+  const read = known.length === 0 ? "" : `: ${listOf(known)}, the point this reads`;
+  // Branches that agree on the place but read different points of the box.
+  const split = reads.filter((r) => r.pivot === undefined).map((r) => r.axis);
+  const splitNote =
+    split.length === 0
+      ? ""
+      : ` On ${axisList(split)} its branches read different points of the box, so 0.5 there is only a placeholder: set ` +
+        `the pivot to the point meant (0 the min corner, 1 the max).`;
+  // A box position times a factor is not a point of the box at all.
+  const scaled = reads.filter((r) => r.pivot !== undefined && Math.abs(r.scale - 1) > COEFF_EPS);
+  const scaledNote = scaled
+    .map(
+      (r) =>
+        ` On ${AXES[r.axis]} the box position is scaled by ${round6(r.scale)}, so P was not a point of the box there; ` +
+        `the pivot names the point it scales.`,
+    )
+    .join("");
+  const unread = [0, 1, 2].filter((a) => !reads.some((r) => r.axis === a));
+  const others =
+    unread.length === 0
+      ? ""
+      : ` pivotBox moves P on every axis, so it moves ${axisList(unread)} too, to the box's centre there (0.5, where P ` +
+        `already is when the box is centred on it); set ${unread.length === 1 ? "that axis'" : "their"} pivot to where P ` +
+        `should sit (0 the min corner, 1 the max).`;
+  return {
+    pivot: vec,
+    fix:
+      `To move each point into its box, use pivotBox with pivot ${vec}${read}.${splitNote}${scaledNote}${others} ` +
+      `pivotBox moves P to that point and re-expresses the box about it, so the world box stays where it was. ${INSTANCE_TAIL}`,
+  };
+}
 
 /** A refusal: what the node's `execute` throws and what `diagnoseGraph` reports. */
 export interface BoundsFrameFault {
@@ -515,16 +626,20 @@ function cornerFault(param: string, axes: readonly number[]): BoundsFrameFault {
   };
 }
 
-function positionFault(param: string, how: string, axes: readonly number[]): BoundsFrameFault {
+function positionFault(param: string, how: string, reads: readonly PlaceRead[]): BoundsFrameFault {
+  const axes = reads.map((r) => r.axis);
   const axisWord = axes.length === 1 ? "axis" : "axes";
+  const { pivot, fix } = pivotFix(reads);
   return {
     code: "position-from-local-box",
     param,
     message:
       `param "${param}" ${how} on ${axisWord} ${axisList(axes)}, with no position() term: ${FRAME}, so its corners and centre ` +
       `(box("lo"), box("center"), attribute("boundsMin"), ...) are offsets FROM P, not world positions, and P would land ` +
-      `at the offset as if it were a place. ${PIVOT_FIX}.`,
-    expected: "pivotBox, or a new P that keeps its position() term",
+      `at the offset as if it were a place. ${fix}.`,
+    // Only pivotBox keeps the world box where it was: a new P that keeps its
+    // position() term (position() + box("y1")) moves the box along with P.
+    expected: `pivotBox with pivot ${pivot}`,
   };
 }
 
@@ -582,8 +697,8 @@ function singleParamFault(
       // the other corner is in another node. `pairedCornerFaults` pairs the
       // two writes at validate, where the graph is in view.
       if (name === "P") {
-        const axes = pFromBox(readParam(params.value), false);
-        return axes.length === 0 ? undefined : positionFault("value", 'writes "P" from a box position', axes);
+        const reads = pFromBox(readParam(params.value), false);
+        return reads.length === 0 ? undefined : positionFault("value", 'writes "P" from a box position', reads);
       }
       return undefined;
     }
@@ -592,13 +707,13 @@ function singleParamFault(
       // P + translate, the shape of the old move-to-the-box idiom.
       if (!isField(params.translate)) return undefined;
       if (!isDefaultVec(params.rotateEuler, 0) || !isDefaultVec(params.scale, 1)) return undefined;
-      const axes = pFromBox(readParam(params.translate), true);
-      return axes.length === 0
+      const reads = pFromBox(readParam(params.translate), true);
+      return reads.length === 0
         ? undefined
         : positionFault(
             "translate",
             "subtracts position() and adds a box position, moving P onto that box position",
-            axes,
+            reads,
           );
     }
     default:

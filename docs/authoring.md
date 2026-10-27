@@ -822,7 +822,11 @@ that box: `min.y = -P.y` with `max.y = P.y` is centred on P and reaches
 world y = 0. `position-from-local-box` catches a P set from a box
 position with no `position()` term (`P = box("center")`, or a
 `transformPoints` translate of `box("center") - position()`), the old
-cell-to-instance hand-off; `pivotBox` is the fix it names.
+cell-to-instance hand-off; `pivotBox` is the fix it names, with the pivot
+that reads the same point of the box (`P.y = box("y1")` gets
+`[0.5, 1, 0.5]`). Only a box position taken as a place is refused: a
+negative one, `P.y = k - box("y0")`, rests the box's floor on the plane
+y = k for every P under an identity rotation and scale, and cooks.
 
 Two consumers matter at the end of a grammar. `boxesToMesh` builds every
 face through the cell's P, rot and scale, so it needs nothing before it.

@@ -75,11 +75,12 @@ async function cooks(doc: Record<string, unknown>): Promise<Geometry> {
 /**
  * The document must be refused twice over, with the same code naming the
  * same node and param: as an error from `checkSerializedGraph` (with a
- * pointer to the param), and as the cook's rejection.
+ * pointer to the param), and as the cook's rejection. `expected`, when
+ * given, is the record's `expected` at both.
  */
 async function refused(
   doc: Record<string, unknown>,
-  want: { code: string; node: string; param: string },
+  want: { code: string; node: string; param: string; expected?: string },
 ): Promise<string> {
   const report = checkSerializedGraph(doc);
   const nodes = doc.nodes as Node[];
@@ -93,6 +94,7 @@ async function refused(
     path: `/nodes/${index}/params/${want.param}`,
   });
   expect(record!.message).toContain(`node "${want.node}" (${nodes[index]!.type})`);
+  if (want.expected !== undefined) expect(record!.expected).toBe(want.expected);
 
   const err: unknown = await cook(deserializeGraph(doc)).then(
     () => undefined,
@@ -101,6 +103,7 @@ async function refused(
   expect(err).toBeInstanceOf(Error);
   const [cooked] = diagnosticsOf(err);
   expect(cooked).toMatchObject({ code: want.code, nodeId: want.node, param: want.param });
+  if (want.expected !== undefined) expect(cooked!.expected).toBe(want.expected);
   const message = (err as Error).message;
   expect(message).toContain(`${nodes[index]!.type}: param "${want.param}"`);
   return message;
@@ -149,34 +152,83 @@ describe("refused: a box whose two corners are position() plus an offset", () =>
 });
 
 describe("refused: P set from a box position", () => {
-  it('setAttribute "P" = box("center") — the old cell-to-instance tail — names pivotBox', async () => {
+  it('setAttribute "P" = box("center") — the old cell-to-instance tail — names pivotBox at the centre', async () => {
     const doc = graphOf({ id: "toCenter", type: "setAttribute", params: { name: "P", tupleSize: 3, value: box("center") } });
-    const message = await refused(doc, { code: "position-from-local-box", node: "toCenter", param: "value" });
-    expect(message).toContain("pivotBox");
+    const message = await refused(doc, {
+      code: "position-from-local-box",
+      node: "toCenter",
+      param: "value",
+      expected: "pivotBox with pivot [0.5, 0.5, 0.5]",
+    });
     expect(message).toContain("offsets FROM P, not world positions");
+    expect(message).toContain(
+      "use pivotBox with pivot [0.5, 0.5, 0.5]: 0.5 on axes x, y and z is the centre, the point this reads. pivotBox moves P",
+    );
+    // Every axis was read, so there is no other axis for pivotBox to move.
+    expect(message).not.toContain("on every axis");
+    expect(message).not.toContain("keeps its position() term");
   });
 
   it("the same centre spelled over the bound attributes", async () => {
     const center = fn("mul", fn("add", { fn: "attribute", name: "boundsMin" }, { fn: "attribute", name: "boundsMax" }), 0.5);
     const doc = graphOf({ id: "estateP", type: "setAttribute", params: { name: "P", tupleSize: 3, value: center } });
-    await refused(doc, { code: "position-from-local-box", node: "estateP", param: "value" });
+    await refused(doc, {
+      code: "position-from-local-box",
+      node: "estateP",
+      param: "value",
+      expected: "pivotBox with pivot [0.5, 0.5, 0.5]",
+    });
   });
 
-  it("one axis set from the box top, the others kept, names that axis", async () => {
+  it('one axis set from the box top, P.y = box("y1"), names that axis and the whole pivot it needs', async () => {
     const value = fn("vec", comp(POS, 0), box("y1"), comp(POS, 2));
     const doc = graphOf({ id: "top", type: "setAttribute", params: { name: "P", tupleSize: 3, value } });
-    const message = await refused(doc, { code: "position-from-local-box", node: "top", param: "value" });
-    expect(message).toContain("on axis y,");
+    const message = await refused(doc, {
+      code: "position-from-local-box",
+      node: "top",
+      param: "value",
+      expected: "pivotBox with pivot [0.5, 1, 0.5]",
+    });
+    expect(message).toBe(
+      'node "top" failed: setAttribute: param "value" writes "P" from a box position on axis y, with no position() term: ' +
+        "a box is an extent " +
+        "in its point's OWN frame (world = P + rot * (scale * x); [0, 0, 0] is the point), so its corners and centre " +
+        '(box("lo"), box("center"), attribute("boundsMin"), ...) are offsets FROM P, not world positions, and P would land ' +
+        "at the offset as if it were a place. To move each point into its box, use pivotBox with pivot [0.5, 1, 0.5]: 1 on " +
+        "axis y is the max corner, the point this reads. pivotBox moves P on every axis, so it moves x and z too, to the " +
+        "box's centre there (0.5, where P already is when the box is centred on it); set their pivot to where P should sit " +
+        "(0 the min corner, 1 the max). pivotBox moves P to that point and re-expresses the box about it, so the world box " +
+        'stays where it was. For instances, follow it with setAttribute "scale" = mul(attribute("scale", 3), box("size")) ' +
+        "and setBounds [-0.5, -0.5, -0.5]..[0.5, 0.5, 0.5]; a world-space fact about a box is read after pivotBox as position().",
+    );
+  });
+
+  it('the box floor taken as a place, P.y = box("y0"), is pivot 0 on y', async () => {
+    const value = fn("vec", comp(POS, 0), box("y0"), comp(POS, 2));
+    const doc = graphOf({ id: "floor", type: "setAttribute", params: { name: "P", tupleSize: 3, value } });
+    const message = await refused(doc, {
+      code: "position-from-local-box",
+      node: "floor",
+      param: "value",
+      expected: "pivotBox with pivot [0.5, 0, 0.5]",
+    });
+    expect(message).toContain("0 on axis y is the min corner");
   });
 
   it("transformPoints translate = box(\"center\") - position() moves P onto the box offset", async () => {
+    // P' = P + translate = box("center"): the box term's sign is the translate's, and it is the old idiom.
     const doc = graphOf({
       id: "cellCenter",
       type: "transformPoints",
       params: { translate: fn("sub", box("center"), POS) },
     });
-    const message = await refused(doc, { code: "position-from-local-box", node: "cellCenter", param: "translate" });
-    expect(message).toContain("pivotBox");
+    const message = await refused(doc, {
+      code: "position-from-local-box",
+      node: "cellCenter",
+      param: "translate",
+      expected: "pivotBox with pivot [0.5, 0.5, 0.5]",
+    });
+    expect(message).toContain("pivotBox with pivot [0.5, 0.5, 0.5]");
   });
 
   it("a fused device run cannot skip the refusal: the resident gates decline exactly the refused params", () => {
@@ -273,6 +325,26 @@ describe("cooks: the legitimate neighbours", () => {
       ),
     );
     expect(column(geo, "P")).toEqual([-16, 2, 0, 0, 5, 0, 16, 2, 2]);
+  });
+
+  it('P.y = -box("y0") rests the box\'s floor on world y = 0, for every P', async () => {
+    const value = fn("vec", comp(POS, 0), fn("mul", -1, box("y0")), comp(POS, 2));
+    const geo = await cooks(graphOf({ id: "rest", type: "setAttribute", params: { name: "P", tupleSize: 3, value } }));
+    // The centred 2 x 4 x 2 box has y0 = -2, so every P.y is 2 and every world floor 0.
+    const p = column(geo, "P");
+    const lo = column(geo, "boundsMin");
+    expect(p).toEqual([-16, 2, 0, 0, 2, 0, 16, 2, 2]);
+    expect([0, 1, 2].map((i) => p[i * 3 + 1]! + lo[i * 3 + 1]!)).toEqual([0, 0, 0]);
+  });
+
+  it('P.y = k - box("y0") rests the floor on the plane y = k, and so does the same translate', async () => {
+    const value = fn("vec", comp(POS, 0), fn("sub", 5, box("y0")), comp(POS, 2));
+    const geo = await cooks(graphOf({ id: "shelf", type: "setAttribute", params: { name: "P", tupleSize: 3, value } }));
+    expect(column(geo, "P").filter((_, i) => i % 3 === 1)).toEqual([7, 7, 7]);
+    // The same plane by a translate: P' = P + (k - y0 - P.y) on y.
+    const translate = fn("vec", 0, fn("sub", fn("sub", 5, box("y0")), comp(POS, 1)), 0);
+    const moved = await cooks(graphOf({ id: "shelf", type: "transformPoints", params: { translate } }));
+    expect(column(moved, "P").filter((_, i) => i % 3 === 1)).toEqual([7, 7, 7]);
   });
 
   it("a SIZE written into P carries no frame: cells laid out by their widths", async () => {
@@ -373,6 +445,47 @@ describe("boundsFrameFaults reads the expression, not its spelling", () => {
     expect(
       boundsFrameFaults("setBounds", { anchor: "center", boundsMin: fieldFromJson(POS as never), size: [1, 1, 1] }),
     ).toEqual([]);
+  });
+
+  it("only a positive box-position term on the axis is a place, and the pivot reads which point of the box", () => {
+    const pivot = (spec: unknown) =>
+      boundsFrameFaults("setAttribute", { name: "P", domain: "point", type: "f32", value: fieldFromJson(spec as never) }).map(
+        (f) => f.expected,
+      );
+    expect(pivot(fn("mul", -1, box("lo")))).toEqual([]);
+    expect(pivot(fn("sub", [0, 3, 0], box("center")))).toEqual([]);
+    expect(pivot(fn("vec", box("x0"), box("y1"), box("cz")))).toEqual(["pivotBox with pivot [0, 1, 0.5]"]);
+    // A blend of the two corners reads the point the weight names.
+    expect(pivot(fn("vec", comp(POS, 0), fn("lerp", box("y0"), box("y1"), 0.25), comp(POS, 2)))).toEqual([
+      "pivotBox with pivot [0.5, 0.25, 0.5]",
+    ]);
+    // Only the refused axis takes a read pivot: -y0 on y is not a place.
+    expect(pivot(fn("vec", box("x1"), fn("mul", -1, box("y0")), comp(POS, 2)))).toEqual(["pivotBox with pivot [1, 0.5, 0.5]"]);
+    // Branches that agree on the place but not the point still refuse, at the centre.
+    expect(pivot(fn("vec", comp(POS, 0), fn("choose", { fn: "index" }, box("y0"), box("y1")), comp(POS, 2)))).toEqual([
+      "pivotBox with pivot [0.5, 0.5, 0.5]",
+    ]);
+    // Float residue in the box term is not a box position: 0.1 y0 + 0.2 y0 - 0.3 y0 is 5.5e-17 y0.
+    const residue = fn("sub", fn("add", fn("mul", 0.1, box("y0")), fn("mul", 0.2, box("y0"))), fn("mul", 0.3, box("y0")));
+    expect(pivot(fn("vec", comp(POS, 0), fn("add", box("sy"), residue), comp(POS, 2)))).toEqual([]);
+    const move = (spec: unknown) =>
+      boundsFrameFaults("transformPoints", { translate: fieldFromJson(spec as never) }).map((f) => f.expected);
+    expect(move(fn("sub", box("hi"), POS))).toEqual(["pivotBox with pivot [1, 1, 1]"]);
+    expect(move(fn("sub", fn("mul", -1, box("lo")), POS))).toEqual([]);
+  });
+
+  it("the hint says when the point is not known, or not a point of the box", () => {
+    const message = (spec: unknown) =>
+      boundsFrameFaults("setAttribute", { name: "P", domain: "point", type: "f32", value: fieldFromJson(spec as never) }).map(
+        (f) => f.message,
+      )[0]!;
+    const split = message(fn("vec", comp(POS, 0), fn("select", fn("gt", { fn: "index" }, 5), box("y1"), box("y0")), comp(POS, 2)));
+    expect(split).toContain("use pivotBox with pivot [0.5, 0.5, 0.5]. On y its branches read different points of the box");
+    expect(split).not.toContain("the point this reads");
+    const third = message(fn("vec", comp(POS, 0), fn("div", box("y1"), 4), comp(POS, 2)));
+    expect(third).toContain("1 on axis y is the max corner, the point this reads. On y the box position is scaled by 0.25");
+    // CONTROL: an unscaled read carries no such note.
+    expect(message(fn("vec", comp(POS, 0), box("y1"), comp(POS, 2)))).not.toContain("scaled by");
   });
 
   it("other domains and other attributes are not judged", () => {
