@@ -223,6 +223,17 @@
       "limits": { "maxContaminatedReschedules": 0 },
       "gate": { "label": "none (reserve slots of a two-campaign A/B)", "baselineArms": ["B"] }
     },
+    "building-calibration": {
+      "$comment": "CALIBRATION of the held-out task building-plan (2026-10-28), NOT an A/B: three runs on one arm, to measure what the task costs and whether agents reach for the box nodes when nothing else fits. Library f069b07b (main; the task's reference solves there and not on 50b2db89 or earlier, see the task's TASK-NOTES.md), packed from a clean LF worktree with the main checkout's packFromRepo and cut with --strip-graphs, as the facade-ab and estate-ab2 arms were, so graphs/examples-floorplan.json (the nearest corpus graph) is not in the package. Settings are facade-ab's: model and prompt from the defaults, the task's own 120 turns / 60 min with 250k output tokens set in taskBudgets, harness reschedules off (flags are read by hand). Not gate.mode calibration, which requires one run per task.",
+      "arms": [{ "label": "A", "tarball": "D:/Projects/JS/pcg-ts/evals/tarballs/building-nographs-0.18.0-f069b07.tgz" }],
+      "tasks": { "include": ["building-plan"] },
+      "expectTaskCount": 1,
+      "runsPerTask": 3,
+      "scheduleSeed": 20261301,
+      "taskBudgets": { "building-plan": { "turns": 120, "wallMinutes": 60, "outputTokens": 250000 } },
+      "limits": { "maxContaminatedReschedules": 0 },
+      "gate": { "label": "none (single-arm calibration; read by hand)", "baselineArms": ["A"] }
+    },
     "fixture": {
       "$comment": "Exercises the runner end to end with the harness fixture task. Use with --agent evals/harness/fixtures/stub-agent.mjs --scorer evals/harness/fixtures/stub-score.mjs to spend no allowance.",
       "arms": [
