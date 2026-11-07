@@ -1,87 +1,29 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="home">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="color-scheme" content="dark" />
 <title>PCG-TS — real-time PCG for TypeScript</title>
+<meta name="description" content="A real-time procedural content generation library for TypeScript. Describe a world as rules and PCG-TS builds it, in the browser or Node." />
 <link rel="icon" href="./icon.svg" type="image/svg+xml" />
 <link rel="stylesheet" href="./site.css" />
 <link rel="alternate" type="text/plain" href="llms.txt" />
 </head>
 <body>
 
-<header>
-  <!-- The logo stands on plain black. The field is a different statement —
-       "this header is cooked from that seed" — and running it behind the
-       lockup made both harder to read: the animation is already a moving
-       figure, and a moving ground under it is two things competing for the
-       same glance. It belongs behind the sentence that claims it. -->
-  <div class="hero-logo">
-    <div class="wrap">
-      <h1 class="hero-title"><span class="vh">PCG-TS</span><span class="lockup" data-logo hidden aria-hidden="true"></span><svg class="wordmark" data-logo-static viewBox="0 0 1055 128" aria-hidden="true" focusable="false"><g fill-rule="nonzero" transform="translate(-9.14,127.96)"><path d="M147.76,-95.97L147.76,-127.96L9.14,-127.96L9.14,-95.97L147.76,-95.97ZM147.762,-95.97L147.762,-63.98L41.13,-63.98L9.14,-31.99L9.14,0L41.13,0L41.13,-31.99L147.762,-31.99L179.752,-63.98L179.752,-95.97L147.762,-95.97Z"/><path d="M368.768,-95.97L368.768,-127.96L230.145,-127.96L198.155,-95.97L198.155,-31.99L230.139,-31.99L230.139,0L368.768,0L368.768,-31.99L230.145,-31.99L230.145,-95.97L368.768,-95.97Z"/><path d="M557.783,-95.97L557.783,-127.96L419.16,-127.96L387.17,-95.97L387.17,-31.99L419.16,-31.99L419.16,-95.97L557.783,-95.97ZM478.925,0L510.917,-31.99L525.793,-31.99L525.793,0L557.783,0L557.783,-63.98L497.696,-63.98L465.706,-31.99L419.16,-31.99L419.16,0L478.925,0Z"/><rect x="576.186" y="-63.98" width="127.96" height="31.99"/><g transform="translate(-18.4628,0)"><path d="M823.908,0L823.908,-95.97L791.918,-95.97L791.918,0L823.908,0ZM893.218,-95.97L893.218,-127.96L823.911,-127.96L823.911,-95.97L893.218,-95.97ZM791.912,-95.97L791.912,-127.96L722.608,-127.96L722.608,-95.97L791.912,-95.97Z"/></g><g transform="translate(884.017944,0)"><path d="M41.13,-95.97L147.762,-95.97L147.762,-127.96L41.13,-127.96L9.14,-95.97L9.14,-63.98L179.752,0L179.752,-34.149L41.13,-86.156L41.13,-95.97ZM41.13,0L41.13,-31.99L9.14,-31.99L9.14,0L41.13,0ZM179.755,-63.986L179.755,-95.97L147.765,-95.97L147.765,-63.986L179.755,-63.986Z"/></g></g></svg></h1>
-    </div>
-  </div>
-  <div class="hero">
-    <canvas id="field" aria-hidden="true"></canvas>
-    <!-- TOP RIGHT OF THIS BAND, not of the header: the link is about the
-         dots, and the dots are what this band is. Outside the content
-         column on purpose — it belongs to the strip rather than to a line
-         of it.
-
-         It says "in the editor" and not "the graph behind this", which
-         would not be true: the field here is drawn straight onto a canvas
-         by the script at the foot of this page — the same construction the
-         library uses, in forty lines, so the landing page ships no bundle.
-         What this opens is the corpus graph that builds the same picture
-         with the library: a scatter, a noise field written to `density`,
-         and a thinning pass. The seed travels with it, so whatever is in
-         the box below arrives in the editor as the scatter's own seed. -->
-    <a
-      class="hero-open"
-      href="./editor/?graph=basics-filter-by-density"
-      title="Open the editor on a graph that builds this kind of field with the library — a scatter thinned by a noise field — starting from the seed you set here."><svg class="ic" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><path d="M200,152a35.77,35.77,0,0,0-16.46,4l-21.39-16.64A35.49,35.49,0,0,0,164,128.65l10.35-3.44A36,36,0,1,0,164,100c0,1.11.06,2.21.16,3.3l-7.78,2.59A36,36,0,0,0,128,92c-1,0-1.88,0-2.81.12l-4.45-10A36,36,0,1,0,96,92c1,0,1.88,0,2.81-.12l4.45,10a35.91,35.91,0,0,0-8.59,39.7L73.39,160.49a36,36,0,1,0,15.94,17.93l21.28-18.91a35.91,35.91,0,0,0,36.8-1.21L167,173.56A36,36,0,1,0,200,152Zm0-64a12,12,0,1,1-12,12A12,12,0,0,1,200,88ZM84,56A12,12,0,1,1,96,68,12,12,0,0,1,84,56ZM56,204a12,12,0,1,1,12-12A12,12,0,0,1,56,204Zm60-76a12,12,0,1,1,12,12A12,12,0,0,1,116,128Zm84,72a12,12,0,1,1,12-12A12,12,0,0,1,200,200Z"/></svg>Editor →</a>
-    <div class="hero-overlay">
-      <div class="wrap">
-        <p class="hero-sub">Real-time procedural content generation for TypeScript — deterministic by construction, WebGPU accelerated, in the browser and Node, with optional three.js interop.</p>
-        <!-- ON the band, not under it. The sentence beside this box says
-             the dots come from this number, and the dots it means are the
-             ones this line now stands on: the control, the claim and the
-             evidence are in one place. -->
-        <span class="seed-ctl">
-      <label for="seed">seed</label>
-      <span class="numbox">
-        <input id="seed" type="number" value="42" step="1" />
-        <span class="steps">
-          <button type="button" tabindex="-1" data-step="-1" aria-label="decrease">&minus;</button>
-          <button type="button" tabindex="-1" data-step="1" aria-label="increase">+</button>
-        </span>
-      </span>
-      <!-- PLAIN WORDS, because this is the first control a stranger meets
-           and the old sentence explained it in three terms they have no
-           reason to know yet: "cooked" is what this library calls running
-           a graph, "header" is this band, and a "field" is a value that
-           varies over space. All three are in the manual and none of them
-           belong on a line whose whole job is to make someone touch the
-           box beside it. What is left is the one thing a reader needs in
-           order to try it: what the number is connected to. What happens
-           when you change it, and what happens when you set it back, the
-           box will show them in less time than a sentence takes to read
-           — and shown beats told for both. -->
-      <span class="seed-note">← every dot here comes from this number.</span>
-        </span>
-      </div>
-    </div>
-  </div>
-  <!-- After the band, because this is what you read once you are done with
-       the header. The two off-site links carry an outward arrow rather than
-       the forward one, which is the only thing distinguishing "another page
-       here" from "you are leaving". -->
-  <div class="wrap hero-bar">
+<!-- THE ORDER OF THIS PAGE IS THE ORDER A STRANGER ASKS IN: what is this,
+     show me, can I touch it, how does it work, what else does it do, and only
+     then the numbers and the architecture. Pictures come first and the
+     vocabulary comes last, so a term is never needed before it has been shown. -->
+<header class="wrap top">
+  <h1 class="hero-title"><span class="vh">PCG-TS</span><span class="lockup" data-logo hidden aria-hidden="true"></span><svg class="wordmark" data-logo-static viewBox="0 0 1055 128" aria-hidden="true" focusable="false"><g fill-rule="nonzero" transform="translate(-9.14,127.96)"><path d="M147.76,-95.97L147.76,-127.96L9.14,-127.96L9.14,-95.97L147.76,-95.97ZM147.762,-95.97L147.762,-63.98L41.13,-63.98L9.14,-31.99L9.14,0L41.13,0L41.13,-31.99L147.762,-31.99L179.752,-63.98L179.752,-95.97L147.762,-95.97Z"/><path d="M368.768,-95.97L368.768,-127.96L230.145,-127.96L198.155,-95.97L198.155,-31.99L230.139,-31.99L230.139,0L368.768,0L368.768,-31.99L230.145,-31.99L230.145,-95.97L368.768,-95.97Z"/><path d="M557.783,-95.97L557.783,-127.96L419.16,-127.96L387.17,-95.97L387.17,-31.99L419.16,-31.99L419.16,-95.97L557.783,-95.97ZM478.925,0L510.917,-31.99L525.793,-31.99L525.793,0L557.783,0L557.783,-63.98L497.696,-63.98L465.706,-31.99L419.16,-31.99L419.16,0L478.925,0Z"/><rect x="576.186" y="-63.98" width="127.96" height="31.99"/><g transform="translate(-18.4628,0)"><path d="M823.908,0L823.908,-95.97L791.918,-95.97L791.918,0L823.908,0ZM893.218,-95.97L893.218,-127.96L823.911,-127.96L823.911,-95.97L893.218,-95.97ZM791.912,-95.97L791.912,-127.96L722.608,-127.96L722.608,-95.97L791.912,-95.97Z"/></g><g transform="translate(884.017944,0)"><path d="M41.13,-95.97L147.762,-95.97L147.762,-127.96L41.13,-127.96L9.14,-95.97L9.14,-63.98L179.752,0L179.752,-34.149L41.13,-86.156L41.13,-95.97ZM41.13,0L41.13,-31.99L9.14,-31.99L9.14,0L41.13,0ZM179.755,-63.986L179.755,-95.97L147.765,-95.97L147.765,-63.986L179.755,-63.986Z"/></g></g></svg></h1>
+  <div class="top-copy">
+    <p class="hero-sub">A real-time procedural content generation library for TypeScript. Describe a world as rules and PCG-TS builds it, in the browser or Node, with optional WebGPU acceleration and three.js interop.</p>
     <div class="hero-actions">
-      <span class="install">npm install pcg-ts</span>
-      <a href="./manual.html" class="manual-link">Read the manual →</a>
-      <a href="./editor/" class="editor-link">Open the editor →</a>
+      <a href="./editor/" class="cta-main">Open the editor →</a>
+      <a href="#demos" class="cta-link">Demos ↓</a>
+      <a href="./manual.html" class="cta-link">Manual →</a>
       <a href="https://github.com/C4RL05/pcg-ts" class="out-link">GitHub ↗</a>
       <a href="https://www.npmjs.com/package/pcg-ts" class="out-link">npm ↗</a>
     </div>
@@ -90,28 +32,168 @@
 
 <main class="wrap">
 
+  <!-- A POSTER UNTIL IT IS CLICKED: the YouTube player is hundreds of
+       kilobytes of someone else's script and a set of cookies, and this page
+       has otherwise made no third-party request since the mermaid import
+       went. The anchor is a real link, so without the script it still plays
+       the film, on YouTube. The film carries a licensed music track, so it
+       is never committed to this repository as a file. -->
+  <figure class="film">
+    <a class="film-frame" href="https://www.youtube.com/watch?v=lYPyynrwcrU" data-youtube="lYPyynrwcrU" aria-label="Play the film “PCG-TS Eiffel Tower demo” on YouTube, 1 minute 22 seconds, with sound">
+      <img src="./landing/film-poster.webp" width="1920" height="1080" decoding="async" fetchpriority="high" alt="Close view from below of the Eiffel Tower's first-floor arch, rendered in grey on white: scrollwork between riveted iron ribs, lattice bracing behind it and engineers' names along the frieze." />
+      <span class="film-play"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4v16l14-8z"/></svg>Watch the film <small>1:22, sound on</small></span>
+    </a>
+    <figcaption>
+      <p><strong>The Eiffel Tower as built in 1889, generated by a PCG-TS graph.</strong> The large structure comes from the published plates and everything smaller is placed by rule. At the detail shown in the film, the graph has 3,448 nodes and places 1.3 million rivets, 110.6 million triangles once drawn. The live page opens lighter, and you can add the lacing and rivets from its controls.</p>
+      <p class="links"><a class="more-link" href="./demos/eiffel/">Run it in your browser →</a> <a class="more-link" href="./guides/eiffel.html">How it was built →</a></p>
+    </figcaption>
+  </figure>
+
+  <section id="demos">
+    <h2>Nine demos, running in your browser</h2>
+    <p>Nothing to install. Each one is a live page you can change, and each opens with its own controls.</p>
+    <div class="examples">
+      <a class="example" href="./demos/eiffel/"><img src="./landing/eiffel.webp" width="1280" height="720" loading="lazy" decoding="async" alt="The Eiffel Tower in grey iron lattice on white, cropped at the second floor so that the four legs, the arches and the first-floor gallery fill the frame, with a pale shadow falling to the right."><span class="meta"><b>Eiffel Tower</b><span>The 1889 structure, from the published plates down to the rivets.</span></span></a>
+      <a class="example" href="./demos/brick-build/"><img src="./landing/brick-build.webp" width="1280" height="720" loading="lazy" decoding="async" alt="A short terrace of brick houses on a green studded baseplate, part way through being built: a cream house with a stepped roof, a yellow house standing open at its top storey, and a red house behind it."><span class="meta"><b>Brick build</b><span>A house from a split grammar, packed into bricks and played back course by course.</span></span></a>
+      <a class="example" href="./demos/galaxy/"><img src="./landing/galaxy.webp" width="1280" height="720" loading="lazy" decoding="async" alt="A spiral galaxy of thousands of white star points around a bright core, on black."><span class="meta"><b>Galaxy</b><span>A streamed spiral galaxy. Click a star to visit its system.</span></span></a>
+      <a class="example" href="./demos/cave/"><img src="./landing/cave.webp" width="1280" height="720" loading="lazy" decoding="async" alt="The inside of a cave: smooth, bulging, cream-coloured rock walls with dark openings between them."><span class="meta"><b>Cave</b><span>One node contours noise into rock, cube by cube, each knowing nothing of its neighbours. Try to find the seam.</span></span></a>
+      <a class="example" href="./demos/gpu-world/"><img src="./landing/gpu-world.webp" width="1280" height="720" loading="lazy" decoding="async" alt="A field of thousands of teal spires of varying height, stretching to the horizon."><span class="meta"><b>GPU world</b><span>Instance matrices composed in WGSL and drawn straight from that buffer. Switch to CPU readback and the upload counter starts climbing.</span></span></a>
+      <a class="example" href="./demos/lanterns/"><img src="./landing/lanterns.webp" width="1280" height="720" loading="lazy" decoding="async" alt="Thousands of small diamond-shaped lanterns in many bright colours, hanging in a curved sheet over black."><span class="meta"><b>Lanterns</b><span>The graph gives each lantern one integer, and the page’s shader turns it into colour, pulse and bob.</span></span></a>
+      <a class="example" href="./demos/infinite-world/"><img src="./landing/infinite-world.webp" width="1280" height="720" loading="lazy" decoding="async" alt="A dark plain scattered with thousands of small pale rocks, with larger boulders standing further away."><span class="meta"><b>Infinite world</b><span>A landscape streamed in around a moving camera, cooked on the CPU or a GPU device.</span></span></a>
+      <a class="example" href="./demos/racetrack/"><img src="./landing/racetrack.webp" width="1280" height="720" loading="lazy" decoding="async" alt="The view from a car on a dark road, with translucent grey blocks of roadside art rising on both sides and a green racing line running ahead."><span class="meta"><b>Racetrack</b><span>Roadside art placed along a spline by rules that measure their own output and correct it.</span></span></a>
+      <a class="example" href="./demos/road/"><img src="./landing/road.webp" width="1280" height="720" loading="lazy" decoding="async" alt="A wireframe road running to the horizon, lined on each side with evenly spaced green wireframe boxes, under an outline map of the closed circuit."><span class="meta"><b>Road</b><span>A spline swept into a road and lined with one evenly spaced row per side.</span></span></a>
+    </div>
+    <p class="links">How they work: <a class="more-link" href="./guides/eiffel.html">Eiffel Tower →</a> <a class="more-link" href="./guides/racetrack.html">racetrack →</a> <a class="more-link" href="./guides/lanterns.html">lanterns →</a></p>
+  </section>
+
   <section>
-    <p class="eyebrow">What it is</p>
-    <h2>A node-graph PCG library</h2>
+    <h2>An editor for every graph</h2>
+    <p>Open any graph, change a value or rewire a node, and see the scene recook behind the nodes. Copy a link to share your settings, or export the graph as JSON to keep what you rewired.</p>
+    <a class="shot" href="./editor/?graph=examples-archipelago"><img src="./landing/editor.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="The PCG-TS editor on the archipelago graph. A panel of sliders for the islands, moisture and relief sits at the top left. In the middle of a dark grid, wooded islands with red-roofed towns rise from a blue sea, and the connected nodes that cook them fill the bottom of the frame."></a>
+    <p class="links"><a class="more-link" href="./editor/">Open the editor →</a></p>
+  </section>
+
+  <section>
+    <h2>109 graphs to read and copy</h2>
+    <p>Alongside the demos is a corpus of 109 graphs. Each one cooks from its JSON alone, and most teach a single idea. Click one to open it in the editor.</p>
+    <div class="strip">
+      <a href="./editor/?graph=examples-archipelago"><img src="./gallery/examples-archipelago.webp" width="720" height="480" loading="lazy" decoding="async" alt="Green islands in a blue sea, seen from above at an angle."><span>archipelago</span></a>
+      <a href="./editor/?graph=examples-tree"><img src="./gallery/examples-tree.webp" width="720" height="480" loading="lazy" decoding="async" alt="A branching orange tree standing above a ground grid."><span>tree</span></a>
+      <a href="./editor/?graph=examples-brick-house"><img src="./gallery/examples-brick-house.webp" width="720" height="480" loading="lazy" decoding="async" alt="A short terrace of brick houses with stepped roofs on a green baseplate."><span>brick house</span></a>
+      <a href="./editor/?graph=basics-split-box"><img src="./gallery/basics-split-box.webp" width="720" height="480" loading="lazy" decoding="async" alt="An ochre facade of three blocks, cut by rules into floors, windows and doors."><span>split grammar</span></a>
+      <a href="./editor/?graph=examples-coral"><img src="./gallery/examples-coral.webp" width="720" height="480" loading="lazy" decoding="async" alt="A dense orange network of branching channels spread across a square."><span>coral</span></a>
+      <a href="./editor/?graph=examples-rig"><img src="./gallery/examples-rig.webp" width="720" height="480" loading="lazy" decoding="async" alt="A suspended truss with cables hanging in curves beneath it."><span>truss rig</span></a>
+    </div>
+    <p class="links"><a class="more-link" href="./gallery.html">See all 109 →</a></p>
+  </section>
+
+  <section>
+    <h2>How it works</h2>
     <!-- BORROWED FROM THE README, and generated into place: everything
          between these markers is written in README.md and stamped here by
          `npm run docs:site`. Editing it here is editing a build artifact —
-         the next docs run puts it back, and `src/docs/site.test.ts` fails
-         in the meantime. See LEDE_SOURCE in src/docs/site.ts.
-
-         The sentence that stood here listed six kinds of output in
-         forty-five words before saying how you build one. The README's
-         opening shows the recipe instead, and names the vocabulary as it
-         goes — which is what a first paragraph is for. -->
+         the next docs run puts it back, and `src/docs/site.test.ts` fails in
+         the meantime. See LEDE_SOURCE in src/docs/site.ts. -->
     <!--pcg:lede-->
       <p><strong>Build worlds out of rules instead of files.</strong> You write the recipe — scatter points over this ground, thin them out with noise, turn each survivor a random amount, put a tree on every one — and PCG-TS runs it. The recipe is a small graph of nodes; running it is called a <em>cook</em>. Feed it the same seed and you get the same world back, byte for byte, on any machine.</p>
       <p>PCG-TS is built for real-time use — cooking is budgeted and cancellable so it can run inside a frame, and the field grammar compiles to WGSL to run on a GPU device when one is there.</p>
     <!--/pcg:lede-->
-    <p>Any parameter can vary across space instead of being a constant: a value can be a function of where it lands, resolved per point.</p>
-    <p>Every random decision flows from a seed through one hash chain, so the same graph and seed produce <strong>byte-identical output</strong> across runs, platforms, cook orders, and streaming paths. Cooking on a GPU device is the one documented exception, and <a href="./architecture.html">architecture</a> states its tolerances.</p>
-    <p>On a GPU device, instance matrices can also be composed in WGSL and handed to three.js in the same buffer, with no readback to the CPU.</p>
-    <p>It is built to be driven by AI agents as much as by humans: nodes carry machine-readable schemas and graphs serialize to stable JSON.</p>
+    <!-- The field is drawn straight onto a canvas by the script at the foot
+         of this page, the same construction the library uses in forty lines,
+         so the landing page ships no bundle. The link opens the corpus graph
+         that builds the same kind of picture with the library: a scatter, a
+         noise field written to `density` and a thinning pass. The seed
+         travels with it. -->
+    <div class="hero">
+      <canvas id="field" aria-hidden="true"></canvas>
+      <a
+      class="hero-open"
+      href="./editor/?graph=basics-filter-by-density"
+      title="Open the editor on a graph that builds this kind of field with the library — a scatter thinned by a noise field — starting from the seed you set here."><svg class="ic" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><path d="M200,152a35.77,35.77,0,0,0-16.46,4l-21.39-16.64A35.49,35.49,0,0,0,164,128.65l10.35-3.44A36,36,0,1,0,164,100c0,1.11.06,2.21.16,3.3l-7.78,2.59A36,36,0,0,0,128,92c-1,0-1.88,0-2.81.12l-4.45-10A36,36,0,1,0,96,92c1,0,1.88,0,2.81-.12l4.45,10a35.91,35.91,0,0,0-8.59,39.7L73.39,160.49a36,36,0,1,0,15.94,17.93l21.28-18.91a35.91,35.91,0,0,0,36.8-1.21L167,173.56A36,36,0,1,0,200,152Zm0-64a12,12,0,1,1-12,12A12,12,0,0,1,200,88ZM84,56A12,12,0,1,1,96,68,12,12,0,0,1,84,56ZM56,204a12,12,0,1,1,12-12A12,12,0,0,1,56,204Zm60-76a12,12,0,1,1,12,12A12,12,0,0,1,116,128Zm84,72a12,12,0,1,1,12-12A12,12,0,0,1,200,200Z"/></svg>Editor →</a>
+      <div class="hero-overlay">
+        <div class="wrap">
+          <span class="seed-ctl">
+            <label for="seed">seed</label>
+            <span class="numbox">
+              <input id="seed" type="number" value="42" step="1" />
+              <span class="steps">
+                <button type="button" tabindex="-1" data-step="-1" aria-label="decrease">&minus;</button>
+                <button type="button" tabindex="-1" data-step="1" aria-label="increase">+</button>
+              </span>
+            </span>
+            <span class="seed-note">← every dot here comes from this number.</span>
+          </span>
+        </div>
+      </div>
+    </div>
+    <h3 class="code-title">In code</h3>
+    <div class="install-line"><span class="install">npm install pcg-ts</span></div>
+    <div class="codeblock"><pre><span class="k">import</span> { Graph, cook, pointScatterInBounds, jitterPoints, fbm, perlinNoise, remap } <span class="k">from</span> <span class="s">"pcg-ts"</span>;
 
+<span class="k">const</span> graph = <span class="k">new</span> Graph(<span class="n">42</span>); <span class="c">// same seed, same output</span>
+
+<span class="k">const</span> scatter = graph.add(pointScatterInBounds, {
+  count: <span class="n">500</span>,
+  boundsMin: [<span class="n">0</span>, <span class="n">0</span>, <span class="n">0</span>],
+  boundsMax: [<span class="n">50</span>, <span class="n">0</span>, <span class="n">50</span>],
+});
+
+<span class="c">// A parameter can be a field: this noise is evaluated once per point.</span>
+<span class="k">const</span> jitter = graph.add(jitterPoints, {
+  amount: remap(fbm(perlinNoise, { seed: <span class="n">7</span>, frequency: <span class="n">0.05</span> }), <span class="n">-1</span>, <span class="n">1</span>, <span class="n">0</span>, <span class="n">1</span>),
+});
+
+graph.connect(scatter, <span class="s">"out"</span>, jitter, <span class="s">"in"</span>);
+graph.output(jitter, <span class="s">"out"</span>, <span class="s">"points"</span>);
+
+<span class="k">const</span> result = <span class="k">await</span> cook(graph);
+console.log(result.stats); <span class="c">// what cooked, what was cached, how long it took</span></pre></div>
+    <p class="links"><a class="more-link" href="./manual.html">Read the manual →</a></p>
+  </section>
+
+  <section>
+    <h2>What the library does</h2>
+    <div class="cards">
+      <div class="card">
+        <h3>Streamed worlds</h3>
+        <p>Levels of 2D or 3D cells, arc sectors along a curve and an unbounded level cook around a viewpoint, and cells it has left are evicted. Cooking is budgeted and cancellable, so it can share a frame with rendering, and a cell comes back the same whatever path the camera took.</p>
+      </div>
+      <div class="card">
+        <h3>GPU cooking</h3>
+        <p>Field expressions compile to WGSL and run on a GPU device. Instance transforms can stay there and be drawn from the same buffer, with no readback. Whatever cannot run there falls back to the CPU and says why.</p>
+      </div>
+      <div class="card">
+        <h3>Buildings from rules</h3>
+        <p>Cut a box into floors, bays, walls and windows, and repeat a rule for a set number of rounds. Ask which pieces touch, so a door lands on a shared wall. Then turn the cells into a mesh or into bricks.</p>
+      </div>
+      <div class="card">
+        <h3>Values that vary over space</h3>
+        <p>A node parameter can be a <code>Field&lt;T&gt;</code>, a function of where it lands, instead of a constant: noise, trig and combinators, evaluated per point. The expression serializes to JSON along with the graph.</p>
+      </div>
+      <div class="card">
+        <h3>Off the main thread</h3>
+        <p>A worker pool cooks graphs on other threads, in the browser and in Node, so a heavy cook does not have to hold up the page.</p>
+      </div>
+      <div class="card">
+        <h3>Any renderer, or none</h3>
+        <p>Graphs produce render-agnostic instance batches. <code>pcg-ts/three</code> hands them to three.js, and the core imports no renderer, so a cook can run headless in Node.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Built to be driven by AI agents</h2>
+    <p>A graph is plain JSON, so an agent can write one, check it and look at the result without any human tooling. Give your agent <a href="./llms.txt"><code>llms.txt</code></a>, or run <code>npx pcg agents --write</code> to point a project’s <code>AGENTS.md</code> at the docs.</p>
+    <ul class="features">
+      <li><b>Nodes that describe themselves</b> — every node type exposes its pins, param schemas, defaults and description at runtime. The <a href="./nodes.md">node reference</a> is generated from that.</li>
+      <li><b>A command line that closes the loop</b> — <code>pcg validate</code>, <code>cook</code>, <code>inspect</code> and <code>render</code>, each with <code>--json</code>. <code>render</code> writes a deterministic SVG that diffs in git.</li>
+      <li><b>Errors that state the fix</b> — validation names the offending node, pin or param and lists the valid alternatives.</li>
+      <li><b>A vocabulary to reuse</b> — 37 named primitives ship as <code>pcg-ts/primitives</code>, cited from JSON by name. A pinned hash that does not match is a hard error, never a near match with a warning.</li>
+    </ul>
+  </section>
+
+  <section id="technical">
+    <h2>Technical details</h2>
     <div class="stats">
       <div class="stat"><b>8,318</b><span>tests, all green</span></div>
       <div class="stat"><b>80</b><span>registered node types</span></div>
@@ -120,101 +202,26 @@
       <div class="stat"><b>0</b><span>required dependencies</span></div>
       <div class="stat"><b><!--pcg:version-minor-->v0.18<!--/pcg:version-minor--></b><span>MIT · ESM · strict TS</span></div>
     </div>
-  </section>
-
-  <section>
-    <p class="eyebrow">Foundations</p>
-    <h2>Four concepts the rest is built on</h2>
+    <p>The node, field and graph counts here are for <code>main</code>. The 0.18.0 release on npm has 68 nodes, 64 field functions and 103 graphs, and does not yet include the grammar, box and brick nodes.</p>
     <div class="cards">
       <div class="card">
         <h3>Attribute data model</h3>
-        <p>Attributes live on four domains — point, vertex, primitive, detail — as SoA typed-array columns, with promote and transfer between them. The standard point carries transform, density, bounds, color, and its own seed. A 2-vertex polyline over shared points is an edge, so a network needs no fifth domain.</p>
-      </div>
-      <div class="card">
-        <h3>Deferred fields — <code>Field&lt;T&gt;</code></h3>
-        <p>A value can be a function of evaluation context, resolved only when it lands on a domain. Node params accept <code>T | Field&lt;T&gt;</code>; noise, trig, and combinators compose into expression trees that also serialize to JSON.</p>
+        <p>Attributes live on four domains — point, vertex, primitive, detail — as SoA typed-array columns, with promote and transfer between them. The standard point carries transform, density, bounds, color and its own seed.</p>
       </div>
       <div class="card">
         <h3>Graph runtime</h3>
-        <p>A pull-based executor with revision-keyed memoization, time-budgeted and cancellable cooking, per-output partial cooks, and serializable subgraphs. Recook an unchanged graph and every node is a cache hit.</p>
+        <p>A pull-based executor with revision-keyed memoization, time-budgeted and cancellable cooking, per-output partial cooks and serializable subgraphs. Recook an unchanged graph and every node is a cache hit.</p>
       </div>
       <div class="card">
-        <h3>Streaming world</h3>
-        <p>Hierarchical levels — 2D or 3D cells, arc sectors along a curve, plus an unbounded level — cook around a viewpoint with hysteresis and LRU eviction. Cell content does not depend on cook order, viewpoint path, or evictions: the suite cooks two paths, an eviction and a recook, and checks that they agree byte for byte.</p>
+        <h3>Determinism</h3>
+        <p>Every random decision flows from a seed through one hash chain, so the same graph and seed give byte-identical output across runs, platforms, cook orders and streaming paths. Cooking on a GPU device is the one documented exception.</p>
+      </div>
+      <div class="card">
+        <h3>Layered core, optional adapters</h3>
+        <p>A core that imports nothing outside itself. three.js interop, the WebGPU compiler and runtime, the worker pool and the CLI depend on it one way only, each as its own import.</p>
       </div>
     </div>
-  </section>
-
-  <!-- The two diagram sections used to sit here. They are the longest
-       things on the page and the slowest to read, and a landing page is
-       read in the order it is written — so everything after them was
-       behind two mermaid figures, a module list and a worked example.
-       They are a page now, and this is the door to it. -->
-  <section>
-    <p class="eyebrow">Architecture</p>
-    <h2>Layered core, optional adapters</h2>
-    <p>A core that imports nothing outside itself, and adapters that depend on
-    it one way only: three.js interop, the WebGPU compiler and device runtime,
-    the worker pool, the CLI. Above that, a streaming runtime that cooks a
-    world around a moving camera in budgeted, cancellable slices.</p>
-    <p><a class="more-link" href="./architecture.html">The module layers and the cook path, in two figures →</a></p>
-  </section>
-
-  <section>
-    <p class="eyebrow">Built for agents</p>
-    <h2>Runtime introspection and stable serialization</h2>
-    <ul class="features">
-      <li><b>Self-describing registry</b> — every node type exposes pins, param schemas, defaults, and prose descriptions at runtime; the node reference is generated from it, never hand-written.</li>
-      <li><b>A command line that closes the loop</b> — <code>pcg nodes</code>, <code>fields</code>, <code>validate</code>, <code>cook</code>, <code>inspect</code>, <code>render</code>. <code>--json</code> prints the same result as JSON rather than running a separate code path, exit codes are 0 / 1 (failure) / 2 (misuse), and <code>render</code> writes a deterministic top-down SVG that diffs in git.</li>
-      <li><b>A vocabulary to reference, not rebuild</b> — 37 named primitives ship as <code>pcg-ts/primitives</code>, cited from JSON as <code>ref: { name, hash? }</code>. A name-only ref upgrades freely; a pinned one hard-errors on mismatch. There is no lenient mode: a mismatch never cooks the nearest match with a warning.</li>
-      <li><b>Stable JSON everywhere</b> — graphs, subgraphs, and field expressions serialize to a versioned format that round-trips to byte-identical cooks.</li>
-      <li><b>Errors that state the fix</b> — validation names the offending node, pin, or param and lists the valid alternatives.</li>
-      <li><b>Introspectable execution</b> — cook stats report what cooked, what was cached, and how long it took.</li>
-      <li><b>Agent entry points</b> — an <a href="./llms.txt"><code>llms.txt</code></a> index pointing at the full hand-written guide (<a href="./llms-full.txt"><code>llms-full.txt</code></a>); <code>npx pcg agents --write</code>, which puts a pointer block into a project's <code>AGENTS.md</code>; generated <code>docs/nodes.md</code> / <code>primitives.md</code> / <code>graphs.md</code> with their <code>.json</code> twins; three skills that point at those generated references by path instead of copying them; an authoring guide with recipes; and the <a href="./manual.html">user manual</a>, whose second half is written for an agent driving the library programmatically.</li>
-      <li><b>Second-agent review</b> — a nontrivial change is re-derived by a separate agent, not self-reviewed, before it lands.</li>
-    </ul>
-  </section>
-
-  <section id="demos">
-    <p class="eyebrow">Examples</p>
-    <h2>Nine demos and an editor, live in your browser</h2>
-    <p>Each demo is a page because what it shows needs a running app around the graph: a streamed world, a renderer that draws straight from GPU buffers, a placement loop that measures its own output and corrects it, a sun to read a lattice by, a clock to play a build back on. The editor opens any graph in the corpus below. Click to run.</p>
-    <p>Behind them sits a corpus of 109 graphs that are data rather than pages: <code>pcg cook graphs/&lt;name&gt;.json</code>. Every one cooks from its JSON alone, with no data injected by a host page. Most are single-concept; eight are one settlement pipeline — ground and wall, district centres, lots, buildings, roads, plus three edit variants — where each stage is the previous file plus nodes and nothing removed, and the earlier stages cook bit-identically inside the later ones. Every one of them is in the <a href="./gallery.html">corpus gallery</a>, cooked in the editor and shot from the frame it draws into.</p>
-    <div class="examples">
-      <!-- THE WHOLE ROW, and the capture rather than the thumbnail. It
-           is the one thing here you can open every other one inside, and
-           at a quarter of this size the graph it is showing — the point
-           of the picture — is a row of grey smudges. The nine demos are a
-           two-column grid under it. -->
-      <a class="example full" href="./editor/"><img src="./manual-assets/editor.jpg" width="1454" height="783" loading="lazy" decoding="async" alt="The PCG-TS editor. Across the top, the wordmark on a white plate, a graph glyph beside the word EDITOR, a graph picker reading “compose several primitives into a scatter”, seed 1023, and icon controls for the render and the node canvas; the status line under it reads 60 fps, cook 11.5 ms, 4 of 4 cooked and cached, 541 points and 541 instances. A curated knobs card on the left offers tabs for scatter, mask and size, with points at 700 and spacing at 0.8 m. Four connected nodes run across the middle — scatter-even, mask-by-noise, random-scale and spawnInstances — floating over the cooked result behind them: a few hundred green conifers gathered into clumps and clearings over a dark ground plane."><span class="meta"><b>editor</b><span>open any corpus graph and edit it live — palette, inspector, a curated knobs panel, JSON round-trip, shareable links, and a cook path you can switch between the CPU and two GPU paths</span></span></a>
-      <a class="example" href="./demos/infinite-world/"><img src="./thumbs/infinite-world.jpg" width="640" height="345" loading="lazy" decoding="async" alt="A landscape of scattered instances streaming around a moving camera, with a panel showing cooked and evicted cell counts."><span class="meta"><b>infinite world</b><span>hierarchical streaming around a moving camera — with a GPU toggle showing combinator-authored fields reaching the device</span></span></a>
-      <a class="example" href="./demos/galaxy/"><img src="./thumbs/galaxy.jpg" width="640" height="345" loading="lazy" decoding="async" alt="A spiral galaxy of tens of thousands of coloured star points around a bright core, with a panel showing streamed star cells."><span class="meta"><b>galaxy</b><span>an infinite deterministic spiral galaxy — streamed star cells, click any star to visit its planets</span></span></a>
-      <a class="example" href="./demos/gpu-world/"><img src="./thumbs/gpu-world.jpg" width="640" height="345" loading="lazy" decoding="async" alt="A streamed world of tall teal spires drawn from GPU-composed matrices, beside a panel reading 40 live cells, 16,800 instances drawn, 1.0 MiB of matrices held on device and 0 B uploaded."><span class="meta"><b>gpu world</b><span>a streamed world whose instance matrices are composed in WGSL and drawn straight from that buffer — toggle to the CPU path and watch the readbacks appear</span></span></a>
-      <a class="example" href="./demos/racetrack/"><img src="./thumbs/racetrack.jpg" width="640" height="345" loading="lazy" decoding="async" alt="The racetrack demo, shown small: a circuit drawn as a pale ribbon seen from above, its whole lap lined on both verges with hundreds of small green wireframe boxes and spanned overhead in places, with the driven view of the road running away beneath it. A controls-and-readout panel fills the left edge, too small at this size to read."><span class="meta"><b>racetrack</b><span>roadside art placed along a spline the page was handed — its legibility rules run as a bounded fixed point, with every repair reporting how much it had to do</span></span></a>
-      <a class="example" href="./demos/road/"><img src="./thumbs/road.jpg" width="640" height="345" loading="lazy" decoding="async" alt="The road demo, shown small: the same circuit as the racetrack card, drawn as a pale ribbon from above with the driven view beneath it — but the verges carry one evenly spaced row of identical small boxes per side instead of varied art. A controls-and-readout panel fills the left edge, too small at this size to read."><span class="meta"><b>road</b><span>a spline the page was handed, swept into a road and dressed with one evenly spaced row per side — no placement rules, just the road and the verges a rule is stated against</span></span></a>
-      <a class="example" href="./demos/cave/"><img src="./thumbs/cave.jpg" width="640" height="345" loading="lazy" decoding="async" alt="The cave demo, shown small: a warm-lit rock interior of smooth bulging walls and dark openings receding into shadow, lit from the camera. A controls-and-readout panel fills the left edge, too small at this size to read."><span class="meta"><b>cave</b><span>one node with no inputs makes the whole world: meshFromField contours a noise into triangles, and the level cuts space into cube cells rather than flat ones — each cube is contoured knowing nothing of its neighbours, and the seam you cannot find between any two of them is the claim being demonstrated</span></span></a>
-      <a class="example" href="./demos/lanterns/"><img src="./thumbs/lanterns.jpg" width="640" height="345" loading="lazy" decoding="async" alt="The lanterns demo, shown small: a few thousand small glowing octahedra of many different hues hanging in a drifting sheet over a dark ground grid, thinning toward the horizon. A controls-and-readout panel fills the left edge, too small at this size to read."><span class="meta"><b>lanterns</b><span>one u32 per instance is the whole interface between a graph and a shader — the graph settles where each lantern hangs and the seed it carries, the page derives colour, pulse and bob from that integer and a clock the graph never sees; switch the id source to the f32 copy and watch the colour wheel collapse</span></span></a>
-      <a class="example" href="./demos/brick-build/"><img src="./thumbs/brick-build.jpg" width="640" height="345" loading="lazy" decoding="async" alt="The brick build demo, shown small: a short terrace of brick houses in pale yellow and cream, half built on a green baseplate: one red stepped roof and its chimney are on, while the cream block stands open at its top storey with the courses above still to come, lit from the side so the shadow falls across the table. A controls-and-readout panel fills the left edge, too small at this size to read."><span class="meta"><b>brick build</b><span>a house derived by a split grammar, packed into catalogue bricks and given a build order, then played back course by course: brickConnectivity gives every brick the step at which it can be placed, attached to something already standing, and the page reads that step per instance on its own clock, so scrubbing the build never cooks the graph again</span></span></a>
-      <a class="example" href="./demos/eiffel/"><img src="./thumbs/eiffel.jpg" width="640" height="345" loading="lazy" decoding="async" alt="The eiffel demo, shown small: the lattice tower drawn in grey lines and wash on white paper, seen three-quarters on so all four legs and both platforms show, its shadow a pale grey on the paper behind it and to the right. A controls-and-readout panel fills the left edge, too small at this size to read."><span class="meta"><b>eiffel</b><span>the tower as built in 1889, its large structure Eiffel’s own plates — the 29 panels of Plate XXXI, node by node — and everything smaller placed by rule, a bracing and a lacing per region; cooked once, one output per part class. Three depths, each a different graph: the skeleton, the web laced into struts, and the rivets on top as instances, by the million</span></span></a>
-    </div>
-    <p><a class="more-link" href="./guides/racetrack.html">How the racetrack decides what stands beside the road, and where →</a></p>
-    <p><a class="more-link" href="./guides/lanterns.html">How one integer per lantern becomes a colour, a flicker and a bob →</a></p>
-    <p><a class="more-link" href="./guides/eiffel.html">How the eiffel demo builds the 1889 tower from Eiffel's own plates, and how it was audited against them →</a></p>
-  </section>
-
-  <!-- The release history used to sit here. It was the last section and
-       the longest, and it is the one part of the site that ages by
-       GROWING — every release adds a row to it and nothing to the page it
-       was on. It is a page now. -->
-  <section>
-    <p class="eyebrow">Roadmap</p>
-    <h2>What shipped in each release</h2>
-    <p>Every release from the first foundation to the current one: the
-    attribute data model and PCG32, then fields, the streaming runtime, the
-    WebGPU compiler and device runtime, subgraphs, the worker pool, and the
-    editor that drives all of it through the same public API the manual
-    documents.</p>
-    <p><a class="more-link" href="./roadmap.html">What shipped in each release →</a></p>
+    <p class="links"><a class="more-link" href="./architecture.html">Architecture →</a> <a class="more-link" href="./manual.html">User manual →</a> <a class="more-link" href="./roadmap.html">What shipped in each release →</a></p>
   </section>
 
 </main>
@@ -232,6 +239,28 @@
   </div>
 </footer>
 
+<script>
+(() => {
+  // The film is a poster until it is asked for. A modified click (new tab,
+  // new window) is left to the link, which goes to the same film on YouTube.
+  // The referrer policy is load-bearing: YouTube refuses an embed that
+  // arrives with no referrer at all.
+  const film = document.querySelector("[data-youtube]");
+  film.addEventListener("click", (e) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+    e.preventDefault();
+    const player = document.createElement("iframe");
+    player.src = `https://www.youtube-nocookie.com/embed/${film.dataset.youtube}?autoplay=1&rel=0&playsinline=1`;
+    player.title = "PCG-TS Eiffel Tower demo";
+    player.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
+    player.allowFullscreen = true;
+    player.referrerPolicy = "strict-origin-when-cross-origin";
+    film.replaceChildren(player);
+    film.removeAttribute("href");
+    film.removeAttribute("aria-label");
+  });
+})();
+</script>
 <script>
 (() => {
   // Deterministic 32-bit hash chain — the same construction idea the
@@ -393,7 +422,7 @@
       const cell = document.querySelector(".grid-guide span");
       const track = Math.round(cell.getBoundingClientRect().width * 10) / 10;
       const gutter = getComputedStyle(document.querySelector(".grid-guide .wrap")).columnGap;
-      note.textContent = `12 x ${track}px · gutter ${gutter} · prose 9 · g to hide`;
+      note.textContent = `12 x ${track}px · gutter ${gutter} · prose 7 · g to hide`;
       document.body.appendChild(note);
     }
     if (note !== null) note.style.display = on ? "" : "none";

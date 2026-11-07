@@ -233,6 +233,11 @@ a parent — these are three different kinds of thing and the old single
   pose is data at the top of `scripts/capture-guides.mjs`, so after a
   lighting or material change this is the whole update: rerun it, never
   retouch an output. `--only=eiffel` or `--only=eiffel/panel` for a subset
+- `npm run capture:landing` — reshoot the landing page's panel-free frames
+  into `docs/landing/`. Each shot's URL and camera is data at the top of
+  `scripts/capture-landing.mjs`, and `--only=<id>` shoots a subset. It leaves
+  `docs/thumbs/` and `docs/manual-assets/` alone. Some poses depend on timing,
+  so look at the frames before committing them
 - `npm run capture:gallery` — reshoot the corpus gallery's frames: every
   graph opened in the editor, shot as its cooked scene and as its node
   graph, then encoded and folded into `docs/gallery.html`. Opens a real
